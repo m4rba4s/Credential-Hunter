@@ -1,0 +1,64 @@
+# Rust & Cargo
+/target
+**/*.rs.bk
+**/*.swp
+**/*.tmp
+
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.bin
+*.out
+*.run
+*.test
+*.deb
+*.rpm
+
+# Test artifacts
+*.log
+*.test
+*.profraw
+
+# IDE/Editor
+.idea/
+.vscode/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Shell scripts compiled artifacts
+*.sh~
+*.bak
+
+# Coverage/bench
+coverage/
+bench/
+
+# Misc
+*.old
+*.orig
+*.pyc
+*.pyo
+
+# Docs cache
+/target/doc
+
+# Custom (you can add your own)
+final_test_runner
+simd_test
+simd_simple_test
+simd_comprehensive_test
+enterprise_simple_test
+enterprise_features_test
+comprehensive_test_suite
+test_runner
+async_simple_test
+async_refactor_simple_test
+async_refactor_test
+
+# Don’t track local scripts
+/scripts/local/
