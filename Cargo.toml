@@ -27,6 +27,8 @@ anti-edr = []
 linux-advanced = ["nix", "procfs"]
 windows-advanced = ["winapi", "windows-service"]
 macos-advanced = ["core-foundation", "mach2"]
+wide = ["dep:wide"]
+aligned-vec = ["dep:aligned-vec"]
 
 [dependencies]
 # Core dependencies
@@ -39,7 +41,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-uuid = { version = "1.6", features = ["v4", "serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1.10"
 rayon = "1.8"
@@ -67,9 +69,9 @@ statrs = "0.16"
 ordered-float = "4.2"
 
 # Performance and SIMD optimizations
-wide = "0.7"  # SIMD operations
-bytemuck = "1.14"  # Safe byte casting
-aligned-vec = "0.5"  # Aligned memory allocation
+wide = { version = "0.7", optional = true }  # SIMD operations
+bytemuck = { version = "1.14", optional = true }  # Safe byte casting
+aligned-vec = { version = "0.5", optional = true }  # Aligned memory allocation
 
 # Additional core dependencies
 hex = "0.4"
@@ -87,6 +89,8 @@ yara = { version = "0.22", optional = true }
 # Optional container support
 bollard = { version = "0.15", optional = true }
 k8s-openapi = { version = "0.20", optional = true, features = ["v1_28"] }
+crossbeam-epoch = "0.9"
+rand = "0.8"
 
 # Optional SIEM integrations (commented out problematic crates)
 # kafka = { version = "0.10", optional = true }
@@ -126,6 +130,7 @@ criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.4"
 mockall = "0.12"
 test-log = "0.2"
+crossbeam-channel = "0.5"
 
 [build-dependencies]
 cc = "1.0"

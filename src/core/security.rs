@@ -741,9 +741,9 @@ impl CryptoContext {
         let mut hmac_key_bytes = [0u8; 32];
         
         rng.fill(&mut master_key_bytes)
-            .context("Failed to generate master key")?;
+            .map_err(|_| anyhow::anyhow!("Failed to generate master key"))?;
         rng.fill(&mut hmac_key_bytes)
-            .context("Failed to generate HMAC key")?;
+            .map_err(|_| anyhow::anyhow!("Failed to generate HMAC key"))?;
         
         Ok(Self {
             master_key: Secret::new(master_key_bytes),
@@ -757,18 +757,18 @@ impl CryptoContext {
     async fn encrypt(&self, data: &[u8], context: &str) -> Result<EncryptedData> {
         let key = aead::LessSafeKey::new(
             aead::UnboundKey::new(&aead::AES_256_GCM, self.master_key.expose_secret())
-                .context("Failed to create encryption key")?
+                .map_err(|_| anyhow::anyhow!("Failed to create encryption key"))?
         );
         
         let mut nonce_bytes = [0u8; 12];
         self.rng.fill(&mut nonce_bytes)
-            .context("Failed to generate nonce")?;
+            .map_err(|_| anyhow::anyhow!("Failed to generate nonce"))?;
         
         let nonce = aead::Nonce::assume_unique_for_key(nonce_bytes);
         
         let mut in_out = data.to_vec();
         let tag = key.seal_in_place_separate_tag(nonce, aead::Aad::from(context.as_bytes()), &mut in_out)
-            .context("Encryption failed")?;
+            .map_err(|_| anyhow::anyhow!("Encryption failed"))?;
         
         let mut state = self.encryption_state.write().await;
         state.encrypted_items += 1;
@@ -790,7 +790,7 @@ impl CryptoContext {
     async fn decrypt(&self, encrypted: &EncryptedData, context: &str) -> Result<Vec<u8>> {
         let key = aead::LessSafeKey::new(
             aead::UnboundKey::new(&aead::AES_256_GCM, self.master_key.expose_secret())
-                .context("Failed to create decryption key")?
+                .map_err(|_| anyhow::anyhow!("Failed to create decryption key"))?
         );
         
         let nonce = aead::Nonce::assume_unique_for_key(encrypted.nonce);
@@ -799,7 +799,7 @@ impl CryptoContext {
         in_out.extend_from_slice(&encrypted.tag);
         
         let plaintext = key.open_in_place(nonce, aead::Aad::from(context.as_bytes()), &mut in_out)
-            .context("Decryption failed")?;
+            .map_err(|_| anyhow::anyhow!("Decryption failed"))?;
         
         let mut state = self.encryption_state.write().await;
         state.decrypted_items += 1;

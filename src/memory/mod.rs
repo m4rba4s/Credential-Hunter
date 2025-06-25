@@ -22,6 +22,7 @@ pub mod regions;
 pub mod extractor;
 pub mod analyzer;
 pub mod stealth;
+pub mod secure_allocator;
 
 pub use scanner::{MemoryScanner, MemoryScanResult, ScanTarget};
 pub use process::{ProcessManager, ProcessInfo, ProcessContext};
@@ -29,6 +30,7 @@ pub use regions::{MemoryRegion, RegionType, RegionPermissions, MemoryMap};
 pub use extractor::{CredentialExtractor, ExtractionMethod, MemoryPattern};
 pub use analyzer::{MemoryAnalyzer, AnalysisResult, SuspiciousPattern};
 pub use stealth::{StealthMemoryScanner, AntiDetection, MemoryObfuscation};
+pub use secure_allocator::{SecureAllocator, SecureBuffer, SecureString, SECURE_ALLOCATOR};
 
 use anyhow::Result;
 use std::sync::Arc;

@@ -133,6 +133,8 @@ pub enum CredentialType {
     ApiSecret,
     SessionToken,
     OauthToken,
+    WebAuthn,
+    Passkey,
     
     // Personal Information
     SocialSecurityNumber,
@@ -348,7 +350,7 @@ impl DetectionEngine {
         };
         
         #[cfg(not(feature = "yara-integration"))]
-        let yara_scanner = None;
+        let _yara_scanner = None;
         
         let stats = Arc::new(RwLock::new(DetectionStats::default()));
         
@@ -484,7 +486,7 @@ impl DetectionEngine {
         
         let result = DetectionResult {
             id: Uuid::new_v4(),
-            credential_type: pattern_match.credential_type,
+            credential_type: pattern_match.credential_type.clone(),
             confidence,
             masked_value: self.mask_value(&pattern_match.value),
             full_value: if self.is_dry_run() { Some(pattern_match.value) } else { None },
@@ -504,7 +506,7 @@ impl DetectionEngine {
                 yara_matches: Vec::new(),
                 processing_time_us: 0,
             },
-            risk_level,
+            risk_level: risk_level.clone(),
             recommended_actions: self.get_recommended_actions(&pattern_match.credential_type, &risk_level),
             timestamp: Utc::now(),
         };
@@ -531,7 +533,7 @@ impl DetectionEngine {
         
         let result = DetectionResult {
             id: Uuid::new_v4(),
-            credential_type,
+            credential_type: credential_type.clone(),
             confidence,
             masked_value: self.mask_value(&entropy_match.value),
             full_value: if self.is_dry_run() { Some(entropy_match.value) } else { None },
@@ -574,7 +576,7 @@ impl DetectionEngine {
         
         let result = DetectionResult {
             id: Uuid::new_v4(),
-            credential_type: ml_result.credential_type,
+            credential_type: ml_result.credential_type.clone(),
             confidence: self.ml_confidence_to_level(ml_result.confidence),
             masked_value: self.mask_value(&ml_result.value),
             full_value: if self.is_dry_run() { Some(ml_result.value) } else { None },

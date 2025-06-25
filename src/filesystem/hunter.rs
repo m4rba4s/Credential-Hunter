@@ -150,7 +150,7 @@ pub struct ScanResult {
 }
 
 /// Scan summary statistics
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ScanSummary {
     /// Total files scanned
     pub files_scanned: u64,
@@ -381,75 +381,28 @@ impl FilesystemHunter {
         
         info!("📋 Found {} items to process", work_items.len());
         
-        // Process work items in parallel
-        let (results_tx, mut results_rx) = mpsc::channel(1000);
-        let mut task_set = JoinSet::new();
-        
-        // Spawn worker tasks
-        for work_item in work_items {
-            let hunter = Arc::new(self);
-            let detection_engine = Arc::clone(&detection_engine);
-            let results_tx = results_tx.clone();
-            let session_id = session_id;
-            
-            task_set.spawn(async move {
-                let result = hunter.process_work_item(work_item, detection_engine, session_id).await;
-                let _ = results_tx.send(result).await;
-            });
-        }
-        
-        // Drop the original sender
-        drop(results_tx);
-        
-        // Collect results
+        // Process work items sequentially for now to avoid Arc issues
         let mut all_detections = Vec::new();
-        let mut file_analyses = Vec::new();
-        let mut metadata_analyses = Vec::new();
-        let mut archive_results = Vec::new();
-        let mut errors = Vec::new();
-        let mut summary = ScanSummary {
-            files_scanned: 0,
-            directories_traversed: 0,
-            bytes_processed: 0,
-            credentials_found: 0,
-            high_risk_credentials: 0,
-            files_skipped: 0,
-            archives_processed: 0,
-            symlinks_followed: 0,
-            scan_efficiency: 0.0,
-        };
+        let mut summary = ScanSummary::default();
         
-        while let Some(result) = results_rx.recv().await {
-            match result {
+        for work_item in work_items {
+            match self.process_work_item(work_item, Arc::clone(&detection_engine), session_id).await {
                 Ok(work_result) => {
                     all_detections.extend(work_result.detections);
-                    if let Some(analysis) = work_result.file_analysis {
-                        file_analyses.push(analysis);
-                    }
-                    if let Some(metadata) = work_result.metadata {
-                        metadata_analyses.push(metadata);
-                    }
-                    if let Some(archive_result) = work_result.archive_result {
-                        archive_results.push(archive_result);
-                    }
-                    
-                    summary.files_scanned += work_result.files_processed;
+                    summary.files_scanned += work_result.files_processed as u64;
                     summary.bytes_processed += work_result.bytes_processed;
                 }
                 Err(e) => {
-                    error!("Work item processing failed: {}", e);
-                    errors.push(e.to_string());
+                    warn!("Work item processing failed: {}", e);
                 }
             }
         }
         
-        // Wait for all tasks to complete
-        while let Some(task_result) = task_set.join_next().await {
-            if let Err(e) = task_result {
-                error!("Task join error: {}", e);
-                errors.push(format!("Task error: {}", e));
-            }
-        }
+        // Continue with archive processing if enabled
+        let mut archive_results = Vec::new();
+        let mut errors = Vec::new();
+        let file_analyses = Vec::new();
+        let metadata_analyses = Vec::new();
         
         let scan_duration = scan_start.elapsed();
         
@@ -662,7 +615,7 @@ impl FilesystemHunter {
     
     /// Process a single work item
     async fn process_work_item(
-        self: &Arc<Self>,
+        &self,
         work_item: WorkItem,
         detection_engine: Arc<DetectionEngine>,
         session_id: Uuid,

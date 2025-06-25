@@ -25,6 +25,8 @@ pub mod protection;
 pub mod cleanup;
 pub mod polymorphism;
 pub mod detection;
+pub mod advanced_evasion;
+pub mod hardware;
 
 pub use engine::{StealthEngine, StealthConfig, StealthLevel, OperationalMode};
 pub use evasion::{EdrEvasion, AvEvasion, EvasionTechnique, EvasionResult};
@@ -34,6 +36,8 @@ pub use protection::{MemoryProtection, AntiAnalysis, DebuggerDetection};
 pub use cleanup::{ArtifactCleanup, CleanupPolicy, CleanupResult};
 pub use polymorphism::{RuntimeMutation, PolymorphicEngine, MutationStrategy};
 pub use detection::{AntiDetection, DetectionEvasion, ThreatDetection};
+pub use advanced_evasion::{AdvancedEvasionEngine, AdvancedEvasionTechniques, EvasionStatus};
+pub use hardware::{HardwareStealth, CpuFeatures, ThermalData};
 
 use anyhow::Result;
 use std::sync::Arc;

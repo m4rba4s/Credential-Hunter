@@ -860,7 +860,7 @@ mod tests {
     
     #[test]
     fn test_process_criteria_matching() {
-        let criteria = ProcessCriteria {
+        let criteria = crate::memory::scanner::ProcessCriteria {
             name_patterns: vec!["test*".to_string()],
             min_memory_mb: Some(10),
             max_memory_mb: None,

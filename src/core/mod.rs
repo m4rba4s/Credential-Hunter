@@ -18,6 +18,8 @@ pub mod security;
 pub mod platform;
 pub mod metrics;
 pub mod scheduler;
+pub mod zero_copy;
+pub mod lockfree;
 
 pub use config::{EchConfig, LogLevel, OutputFormat};
 pub use engine::EchEngine;
@@ -25,3 +27,5 @@ pub use security::SecurityContext;
 pub use platform::Platform;
 pub use metrics::Metrics;
 pub use scheduler::TaskScheduler;
+pub use zero_copy::ZeroCopyScanner;
+pub use lockfree::{LockFreeQueue, LockFreeHashMap, ConcurrentCredentialBuffer};

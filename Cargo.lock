@@ -62,6 +62,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "aligned-vec"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4aa90d7ce82d4be67b64039a3d588d38dbcc6736577de4a847025ce5b0c468d1"
+
+[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -797,10 +803,12 @@ name = "enterprise-credential-hunter"
 version = "1.0.0"
 dependencies = [
  "aes-gcm",
+ "aligned-vec",
  "anyhow",
  "argon2",
  "bindgen 0.69.5",
  "bollard",
+ "bytemuck",
  "candle-core",
  "candle-nn",
  "candle-transformers",
@@ -810,6 +818,8 @@ dependencies = [
  "core-foundation",
  "criterion",
  "crossbeam",
+ "crossbeam-channel",
+ "crossbeam-epoch",
  "dashmap",
  "glob",
  "hex",
@@ -826,6 +836,7 @@ dependencies = [
  "parking_lot",
  "procfs",
  "proptest",
+ "rand 0.8.5",
  "rayon",
  "regex",
  "reqwest",
@@ -845,6 +856,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
+ "wide",
  "winapi",
  "windows-service",
  "yara",
