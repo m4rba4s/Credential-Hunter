@@ -24,19 +24,15 @@ use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
-use super::config::EchConfig;
-use super::security::SecurityContext;
-use super::platform::Platform;
-use super::metrics::Metrics;
-use super::scheduler::TaskScheduler;
+use crate::core::config::EchConfig;
+use crate::core::security::SecurityContext;
+use crate::core::platform::Platform;
+use crate::core::metrics::Metrics;
+use crate::core::scheduler::TaskScheduler;
 
+// ELITE CORE IMPORTS - NO BLOAT!
 use crate::detection::{DetectionEngine, DetectionResult};
-use crate::memory::MemoryScanner;
-use crate::filesystem::FilesystemHunter;
-use crate::container::ContainerScanner;
 use crate::stealth::StealthEngine;
-use crate::remediation::RemediationEngine;
-use crate::siem::SiemIntegration;
 
 /// Main ECH engine that orchestrates all operations
 pub struct EchEngine {
@@ -52,23 +48,11 @@ pub struct EchEngine {
     /// Detection engine
     detection_engine: Arc<DetectionEngine>,
     
-    /// Memory scanner
-    memory_scanner: Option<Arc<MemoryScanner>>,
-    
-    /// Filesystem hunter
-    filesystem_hunter: Arc<FilesystemHunter>,
-    
-    /// Container scanner
-    container_scanner: Option<Arc<ContainerScanner>>,
-    
-    /// Stealth engine
+    /// Stealth engine for advanced evasion
     stealth_engine: Option<Arc<StealthEngine>>,
     
-    /// Remediation engine
-    remediation_engine: Arc<RemediationEngine>,
-    
-    /// SIEM integration
-    siem_integration: Option<Arc<SiemIntegration>>,
+    /// Memory dump analyzer (mimikatz-style)
+    dump_analyzer: Arc<crate::memory::MemoryDumpAnalyzer>,
     
     /// Task scheduler
     task_scheduler: Arc<TaskScheduler>,
@@ -287,20 +271,8 @@ impl EchEngine {
                 .context("Failed to initialize detection engine")?
         );
         
-        // Initialize filesystem hunter
-        let filesystem_config = crate::filesystem::HunterConfig::default(); // TODO: Convert from config
-        let filesystem_hunter = Arc::new(
-            FilesystemHunter::new(filesystem_config)
-                .await
-                .context("Failed to initialize filesystem hunter")?
-        );
-        
-        // Initialize remediation engine
-        let remediation_engine = Arc::new(
-            RemediationEngine::new(config.remediation.clone())
-                .await
-                .context("Failed to initialize remediation engine")?
-        );
+        // Initialize memory dump analyzer
+        let dump_analyzer = Arc::new(crate::memory::MemoryDumpAnalyzer::new());
         
         // Initialize task scheduler
         let task_scheduler = Arc::new(
@@ -311,48 +283,13 @@ impl EchEngine {
         // Initialize metrics
         let metrics = Arc::new(Metrics::new());
         
-        // Initialize optional components based on configuration
-        let memory_scanner = if config.operation.memory_enabled && security_context.can_access_memory() {
-            let memory_config = crate::memory::MemoryConfig::default(); // TODO: Convert from config
-            Some(Arc::new(
-                MemoryScanner::new(memory_config)
-                    .await
-                    .context("Failed to initialize memory scanner")?
-            ))
-        } else {
-            if config.operation.memory_enabled {
-                warn!("Memory scanning requested but insufficient privileges");
-            }
-            None
-        };
-        
-        let container_scanner = if config.container.docker_enabled || config.container.podman_enabled {
-            Some(Arc::new(
-                ContainerScanner::new(config.container.clone())
-                    .await
-                    .context("Failed to initialize container scanner")?
-            ))
-        } else {
-            None
-        };
-        
-        let stealth_engine = if !matches!(config.stealth.mode, super::config::StealthMode::None) {
-            let stealth_config = crate::stealth::StealthConfig::default(); // TODO: Convert from config
+        // Initialize stealth engine if enabled
+        let stealth_engine = if !matches!(config.stealth.mode, crate::core::config::StealthMode::None) {
+            let stealth_config = crate::stealth::StealthConfig::default();
             Some(Arc::new(
                 StealthEngine::new(stealth_config)
                     .await
                     .context("Failed to initialize stealth engine")?
-            ))
-        } else {
-            None
-        };
-        
-        let siem_integration = if config.siem.endpoint.is_some() {
-            let siem_config = crate::siem::SiemConfig::default(); // TODO: Convert from config
-            Some(Arc::new(
-                SiemIntegration::new(siem_config)
-                    .await
-                    .context("Failed to initialize SIEM integration")?
             ))
         } else {
             None
@@ -387,12 +324,8 @@ impl EchEngine {
             security_context,
             platform,
             detection_engine,
-            memory_scanner,
-            filesystem_hunter,
-            container_scanner,
             stealth_engine,
-            remediation_engine,
-            siem_integration,
+            dump_analyzer,
             task_scheduler,
             metrics,
             state,
@@ -403,159 +336,39 @@ impl EchEngine {
         Ok(engine)
     }
     
-    /// Scan filesystem for credentials
-    pub async fn scan_filesystem(&self, targets: Vec<String>) -> Result<EngineResult> {
-        let operation_id = self.start_operation("filesystem_scan", &targets.join(",")).await?;
-        info!("📁 Starting filesystem credential scan on {} targets", targets.len());
-        
-        let start_time = std::time::Instant::now();
-        let mut all_detections = Vec::new();
-        let mut targets_scanned = 0u64;
-        let mut bytes_processed = 0u64;
-        let mut errors_encountered = 0u64;
+    /// Analyze memory dump for credentials (mimikatz-style)
+    pub async fn analyze_memory_dump<P: AsRef<std::path::Path>>(&self, dump_path: P) -> Result<EngineResult> {
+        let path_str = dump_path.as_ref().to_string_lossy().to_string();
+        let operation_id = self.start_operation("memory_dump_analysis", &path_str).await?;
+        info!("🧠 Starting memory dump analysis: {}", path_str);
         
         // Apply stealth measures if configured
         if let Some(ref stealth_engine) = self.stealth_engine {
             stealth_engine.activate_stealth_mode().await?;
         }
         
-        // Process targets in parallel
-        let mut task_set = JoinSet::new();
+        let start_time = std::time::Instant::now();
         
-        for target in targets {
-            let filesystem_hunter = Arc::clone(&self.filesystem_hunter);
-            let detection_engine = Arc::clone(&self.detection_engine);
-            let target_clone = target.clone();
-            
-            task_set.spawn(async move {
-                filesystem_hunter.scan_path(&target_clone, detection_engine).await
-            });
-        }
-        
-        // Collect results
-        while let Some(result) = task_set.join_next().await {
-            match result {
-                Ok(Ok(scan_result)) => {
-                    all_detections.extend(scan_result.detections);
-                    targets_scanned += scan_result.summary.files_scanned;
-                    bytes_processed += scan_result.summary.bytes_processed;
-                }
-                Ok(Err(e)) => {
-                    error!("Filesystem scan error: {}", e);
-                    errors_encountered += 1;
-                }
-                Err(e) => {
-                    error!("Task join error: {}", e);
-                    errors_encountered += 1;
-                }
-            }
-        }
+        // Analyze the dump
+        let dump_result = self.dump_analyzer.analyze_dump(dump_path).await
+            .context("Memory dump analysis failed")?;
         
         let processing_time = start_time.elapsed().as_millis() as u64;
         
-        // Process results through remediation if configured
-        if !self.config.operation.dry_run {
-            all_detections = self.apply_remediation(all_detections).await?;
-        }
-        
-        // Send to SIEM if configured
-        if let Some(ref siem) = self.siem_integration {
-            if let Err(e) = siem.send_detections(&all_detections).await {
-                warn!("Failed to send detections to SIEM: {}", e);
-            }
-        }
-        
         let summary = OperationSummary {
-            targets_scanned,
-            credentials_found: all_detections.len() as u64,
-            high_risk_credentials: all_detections.iter()
+            targets_scanned: 1,
+            credentials_found: dump_result.credentials_found.len() as u64 + dump_result.lsa_credentials.len() as u64,
+            high_risk_credentials: dump_result.credentials_found.iter()
                 .filter(|d| matches!(d.risk_level, crate::detection::engine::RiskLevel::High | crate::detection::engine::RiskLevel::Critical))
                 .count() as u64,
             processing_time_ms: processing_time,
-            bytes_processed,
-            errors_encountered,
-        };
-        
-        // Generate compliance report if needed
-        let compliance_report = if self.config.audit.chain_of_custody {
-            Some(self.generate_compliance_report(&all_detections).await?)
-        } else {
-            None
+            bytes_processed: dump_result.file_size_bytes,
+            errors_encountered: dump_result.errors.len() as u64,
         };
         
         let result = EngineResult {
             operation_id,
-            detections: all_detections,
-            summary: summary.clone(),
-            recommendations: self.generate_recommendations(&summary).await,
-            compliance_report,
-        };
-        
-        self.complete_operation(operation_id, &summary).await?;
-        
-        info!("✅ Filesystem scan completed: {} credentials found in {}ms", 
-              result.summary.credentials_found, result.summary.processing_time_ms);
-        
-        Ok(result)
-    }
-    
-    /// Scan process memory for credentials
-    pub async fn scan_memory(&self, targets: Vec<String>) -> Result<EngineResult> {
-        let memory_scanner = self.memory_scanner.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Memory scanning not available"))?;
-        
-        let operation_id = self.start_operation("memory_scan", &targets.join(",")).await?;
-        info!("🧠 Starting memory credential scan on {} targets", targets.len());
-        
-        if !self.security_context.validate_privileges() {
-            return Err(anyhow::anyhow!("Insufficient privileges for memory scanning"));
-        }
-        
-        let start_time = std::time::Instant::now();
-        let mut all_detections = Vec::new();
-        
-        // Apply maximum stealth for memory operations
-        if let Some(ref stealth_engine) = self.stealth_engine {
-            stealth_engine.activate_memory_stealth().await?;
-        }
-        
-        // Parse targets as PIDs or process names
-        for target in &targets {
-            let scan_result = if let Ok(pid) = target.parse::<u32>() {
-                memory_scanner.scan_process_by_pid(pid, Arc::clone(&self.detection_engine)).await
-            } else {
-                memory_scanner.scan_process_by_name(target, Arc::clone(&self.detection_engine)).await
-            };
-            
-            match scan_result {
-                Ok(detections) => all_detections.extend(detections),
-                Err(e) => {
-                    error!("Memory scan error for target {}: {}", target, e);
-                }
-            }
-        }
-        
-        let processing_time = start_time.elapsed().as_millis() as u64;
-        
-        // Apply remediation
-        if !self.config.operation.dry_run {
-            all_detections = self.apply_remediation(all_detections).await?;
-        }
-        
-        let summary = OperationSummary {
-            targets_scanned: targets.len() as u64,
-            credentials_found: all_detections.len() as u64,
-            high_risk_credentials: all_detections.iter()
-                .filter(|d| matches!(d.risk_level, crate::detection::engine::RiskLevel::Critical))
-                .count() as u64,
-            processing_time_ms: processing_time,
-            bytes_processed: 0, // Memory scanning doesn't track bytes
-            errors_encountered: 0,
-        };
-        
-        let result = EngineResult {
-            operation_id,
-            detections: all_detections,
+            detections: dump_result.credentials_found,
             summary: summary.clone(),
             recommendations: self.generate_recommendations(&summary).await,
             compliance_report: None,
@@ -563,39 +376,55 @@ impl EchEngine {
         
         self.complete_operation(operation_id, &summary).await?;
         
-        info!("✅ Memory scan completed: {} credentials found", result.summary.credentials_found);
+        info!("✅ Memory dump analysis completed: {} credentials found in {}ms", 
+              result.summary.credentials_found, result.summary.processing_time_ms);
+        
         Ok(result)
     }
     
-    /// Scan containers for credentials
-    pub async fn scan_containers(&self, targets: Vec<String>) -> Result<EngineResult> {
-        let container_scanner = self.container_scanner.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Container scanning not available"))?;
+    /// Perform elite detection scan on targets  
+    pub async fn scan_detection_targets(&self, targets: Vec<String>) -> Result<EngineResult> {
+        let operation_id = self.start_operation("detection_scan", &targets.join(",")).await?;
+        info!("🎯 Starting elite detection scan on {} targets", targets.len());
         
-        let operation_id = self.start_operation("container_scan", &targets.join(",")).await?;
-        info!("🐳 Starting container credential scan");
+        if !self.security_context.validate_privileges() {
+            return Err(anyhow::anyhow!("Insufficient privileges for detection scanning"));
+        }
         
         let start_time = std::time::Instant::now();
-        let all_detections = if targets.is_empty() {
-            // Scan all containers
-            container_scanner.scan_all_containers(Arc::clone(&self.detection_engine)).await?
-        } else {
-            // Scan specific containers
-            let mut detections = Vec::new();
-            for target in &targets {
-                let result = container_scanner.scan_container(target, Arc::clone(&self.detection_engine)).await?;
-                detections.extend(result);
+        let mut all_detections = Vec::new();
+        
+        // Apply stealth measures
+        if let Some(ref stealth_engine) = self.stealth_engine {
+            stealth_engine.activate_stealth_mode().await?;
+        }
+        
+        // Process each target (basic detection scan)
+        for target in &targets {
+            let location = crate::detection::engine::CredentialLocation {
+                source_type: "detection_scan".to_string(),
+                path: target.clone(),
+                line_number: None,
+                column: None,
+                memory_address: None,
+                process_id: None,
+                container_id: None,
+            };
+            match self.detection_engine.detect_in_text(target, location).await {
+                Ok(detections) => all_detections.extend(detections),
+                Err(e) => {
+                    error!("Detection scan error for target {}: {}", target, e);
+                }
             }
-            detections
-        };
+        }
         
         let processing_time = start_time.elapsed().as_millis() as u64;
         
         let summary = OperationSummary {
-            targets_scanned: if targets.is_empty() { 1 } else { targets.len() as u64 },
+            targets_scanned: targets.len() as u64,
             credentials_found: all_detections.len() as u64,
             high_risk_credentials: all_detections.iter()
-                .filter(|d| matches!(d.risk_level, crate::detection::engine::RiskLevel::High | crate::detection::engine::RiskLevel::Critical))
+                .filter(|d| matches!(d.risk_level, crate::detection::engine::RiskLevel::Critical))
                 .count() as u64,
             processing_time_ms: processing_time,
             bytes_processed: 0,
@@ -612,7 +441,7 @@ impl EchEngine {
         
         self.complete_operation(operation_id, &summary).await?;
         
-        info!("✅ Container scan completed: {} credentials found", result.summary.credentials_found);
+        info!("✅ Detection scan completed: {} credentials found", result.summary.credentials_found);
         Ok(result)
     }
     
@@ -681,17 +510,6 @@ impl EchEngine {
         Ok(result)
     }
     
-    /// Test SIEM integration
-    pub async fn test_siem_integration(&self) -> Result<()> {
-        if let Some(ref siem) = self.siem_integration {
-            info!("🔗 Testing SIEM integration");
-            siem.test_connection().await?;
-            info!("✅ SIEM integration test successful");
-        } else {
-            warn!("SIEM integration not configured");
-        }
-        Ok(())
-    }
     
     /// Self-destruct and cleanup
     pub async fn self_destruct(&self) -> Result<()> {
@@ -718,12 +536,10 @@ impl EchEngine {
     
     /// Show system capabilities
     pub async fn show_capabilities(&self) -> Result<()> {
-        info!("🔍 ECH System Capabilities:");
+        info!("🔍 ECH Elite System Capabilities:");
         info!("  Platform: {}", self.platform.get_info().await?.name);
-        info!("  Memory scanning: {}", self.memory_scanner.is_some());
-        info!("  Container scanning: {}", self.container_scanner.is_some());
+        info!("  Memory dump analysis: Available (mimikatz-style)");
         info!("  Stealth mode: {}", self.stealth_engine.is_some());
-        info!("  SIEM integration: {}", self.siem_integration.is_some());
         info!("  Privileged mode: {}", self.security_context.validate_privileges());
         
         // Show detection capabilities
@@ -731,6 +547,9 @@ impl EchEngine {
         info!("  Entropy analysis: Available");
         info!("  ML classification: Available");
         info!("  Context analysis: Available");
+        info!("  LSA bypass: Available");
+        info!("  IMDS hunting: Available");
+        info!("  WebAuthn extraction: Available");
         
         Ok(())
     }
@@ -794,21 +613,6 @@ impl EchEngine {
         Ok(())
     }
     
-    /// Apply remediation actions to detections
-    async fn apply_remediation(&self, detections: Vec<DetectionResult>) -> Result<Vec<DetectionResult>> {
-        if detections.is_empty() {
-            return Ok(detections);
-        }
-        
-        info!("🔧 Applying remediation to {} detections", detections.len());
-        
-        let remediated_detections = self.remediation_engine
-            .process_detections(detections)
-            .await
-            .context("Remediation failed")?;
-        
-        Ok(remediated_detections)
-    }
     
     /// Generate compliance report for detections
     async fn generate_compliance_report(&self, detections: &[DetectionResult]) -> Result<ComplianceReport> {
@@ -877,110 +681,6 @@ impl EchEngine {
     }
 }
 
-// Placeholder modules that need to be implemented
-mod placeholder_modules {
-    use super::*;
-    
-    // These are placeholder types for modules that need to be implemented
-    pub struct MemoryScanner;
-    pub struct FilesystemHunter;
-    pub struct ContainerScanner;
-    pub struct StealthEngine;
-    pub struct RemediationEngine;
-    pub struct SiemIntegration;
-    
-    impl MemoryScanner {
-        pub async fn new(_config: crate::core::config::MemoryConfig) -> Result<Self> {
-            Ok(Self)
-        }
-        
-        pub async fn scan_process_by_pid(&self, _pid: u32, _detection_engine: Arc<DetectionEngine>) -> Result<Vec<DetectionResult>> {
-            Ok(Vec::new())
-        }
-        
-        pub async fn scan_process_by_name(&self, _name: &str, _detection_engine: Arc<DetectionEngine>) -> Result<Vec<DetectionResult>> {
-            Ok(Vec::new())
-        }
-    }
-    
-    impl FilesystemHunter {
-        pub async fn new(_config: crate::core::config::FilesystemConfig) -> Result<Self> {
-            Ok(Self)
-        }
-        
-        pub async fn scan_path(&self, _path: &str, _detection_engine: Arc<DetectionEngine>) -> Result<FilesystemScanResult> {
-            Ok(FilesystemScanResult {
-                detections: Vec::new(),
-                files_scanned: 1,
-                bytes_processed: 0,
-            })
-        }
-    }
-    
-    pub struct FilesystemScanResult {
-        pub detections: Vec<DetectionResult>,
-        pub files_scanned: u64,
-        pub bytes_processed: u64,
-    }
-    
-    impl ContainerScanner {
-        pub async fn new(_config: crate::core::config::ContainerConfig) -> Result<Self> {
-            Ok(Self)
-        }
-        
-        pub async fn scan_all_containers(&self, _detection_engine: Arc<DetectionEngine>) -> Result<Vec<DetectionResult>> {
-            Ok(Vec::new())
-        }
-        
-        pub async fn scan_container(&self, _container_id: &str, _detection_engine: Arc<DetectionEngine>) -> Result<Vec<DetectionResult>> {
-            Ok(Vec::new())
-        }
-    }
-    
-    impl StealthEngine {
-        pub async fn new(_config: crate::core::config::StealthConfig) -> Result<Self> {
-            Ok(Self)
-        }
-        
-        pub async fn activate_stealth_mode(&self) -> Result<()> {
-            Ok(())
-        }
-        
-        pub async fn activate_memory_stealth(&self) -> Result<()> {
-            Ok(())
-        }
-        
-        pub async fn secure_cleanup(&self) -> Result<()> {
-            Ok(())
-        }
-    }
-    
-    impl RemediationEngine {
-        pub async fn new(_config: crate::core::config::RemediationConfig) -> Result<Self> {
-            Ok(Self)
-        }
-        
-        pub async fn process_detections(&self, detections: Vec<DetectionResult>) -> Result<Vec<DetectionResult>> {
-            Ok(detections)
-        }
-    }
-    
-    impl SiemIntegration {
-        pub async fn new(_config: crate::core::config::SiemConfig) -> Result<Self> {
-            Ok(Self)
-        }
-        
-        pub async fn send_detections(&self, _detections: &[DetectionResult]) -> Result<()> {
-            Ok(())
-        }
-        
-        pub async fn test_connection(&self) -> Result<()> {
-            Ok(())
-        }
-    }
-}
-
-use placeholder_modules::*;
 
 #[cfg(test)]
 mod tests {
@@ -994,12 +694,12 @@ mod tests {
     }
     
     #[tokio::test] 
-    async fn test_filesystem_scan() {
+    async fn test_detection_scan() {
         let config = EchConfig::default();
         let engine = EchEngine::new(config).await.unwrap();
         
-        let targets = vec!["/tmp".to_string()];
-        let result = engine.scan_filesystem(targets).await;
+        let targets = vec!["test_target".to_string()];
+        let result = engine.scan_detection_targets(targets).await;
         assert!(result.is_ok());
     }
 }

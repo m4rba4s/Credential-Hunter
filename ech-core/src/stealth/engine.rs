@@ -34,6 +34,7 @@ use super::polymorphism::{RuntimeMutation, PolymorphicEngine};
 use super::detection::{AntiDetection, ThreatDetection};
 
 /// Main stealth engine orchestrating all anti-detection capabilities
+#[derive(Clone)]
 pub struct StealthEngine {
     /// Engine configuration
     config: StealthSystemConfig,
@@ -588,24 +589,24 @@ impl StealthEngine {
     async fn start_background_monitoring(&self) -> Result<()> {
         debug!("🚀 Starting background monitoring tasks");
         
-        let engine = Arc::new(self);
+        let engine = self.clone();
         
         // Start threat monitoring
-        let threat_engine = Arc::clone(&engine);
+        let threat_engine = engine.clone();
         tokio::spawn(async move {
             threat_engine.threat_monitoring_loop().await;
         });
         
         // Start mutation engine if enabled
-        if self.mutation_engine.is_some() {
-            let mutation_engine = Arc::clone(&engine);
+        if engine.mutation_engine.is_some() {
+            let mutation_engine = engine.clone();
             tokio::spawn(async move {
                 mutation_engine.mutation_loop().await;
             });
         }
         
         // Start debugger detection
-        let debugger_engine = Arc::clone(&engine);
+        let debugger_engine = engine.clone();
         tokio::spawn(async move {
             debugger_engine.debugger_monitoring_loop().await;
         });
@@ -614,7 +615,7 @@ impl StealthEngine {
     }
     
     /// Background threat monitoring loop
-    async fn threat_monitoring_loop(self: &Arc<Self>) {
+    async fn threat_monitoring_loop(&self) {
         let mut interval = tokio::time::interval(Duration::from_secs(30));
         
         loop {
@@ -627,7 +628,7 @@ impl StealthEngine {
     }
     
     /// Background mutation loop
-    async fn mutation_loop(self: &Arc<Self>) {
+    async fn mutation_loop(&self) {
         let mut interval = tokio::time::interval(
             Duration::from_secs(self.config.mutation_interval_sec)
         );
@@ -647,7 +648,7 @@ impl StealthEngine {
     }
     
     /// Background debugger monitoring loop
-    async fn debugger_monitoring_loop(self: &Arc<Self>) {
+    async fn debugger_monitoring_loop(&self) {
         let mut interval = tokio::time::interval(Duration::from_secs(5));
         
         loop {

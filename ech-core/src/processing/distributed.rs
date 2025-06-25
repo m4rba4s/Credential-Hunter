@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use anyhow::{Result, anyhow};
 
-use crate::core::lockfree::{LockFreeQueue, ConcurrentCredentialBuffer};
+use crate::core::lockfree::LockFreeQueue;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessingTask {

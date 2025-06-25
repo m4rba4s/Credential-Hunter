@@ -21,6 +21,7 @@ pub mod classifier;
 pub mod yara_integration;
 pub mod webauthn_simple;
 pub mod webauthn_real;
+pub mod imds_hunter;
 
 pub use engine::{DetectionEngine, DetectionResult, CredentialType, ConfidenceLevel, CredentialLocation, RiskLevel};
 pub use patterns::{PatternRegistry, PatternMatch, CustomPattern};
@@ -29,6 +30,7 @@ pub use context::ContextAnalyzer;
 pub use classifier::MLClassifier;
 pub use webauthn_simple::{WebAuthnHunter, WebAuthnCredential};
 pub use webauthn_real::{WebAuthnHunter as RealWebAuthnHunter, WebAuthnMetadata};
+pub use imds_hunter::{ImdsHunter, ImdsConfig, ImdsCredential, ImdsMonitoringResult, CloudProvider};
 
 #[cfg(feature = "yara-integration")]
 pub use yara_integration::YaraScanner;

@@ -1,9 +1,14 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::fs;
-use tracing::{info, warn, debug};
-use crate::detection::{DetectionResult, CredentialType, RiskLevel};
+use tracing::{info, debug};
+use uuid::Uuid;
+use chrono::Utc;
+use crate::detection::engine::{
+    DetectionResult, CredentialType, RiskLevel, ConfidenceLevel,
+    CredentialLocation, CredentialContext, DetectionMetadata
+};
 
 #[derive(Debug, Clone)]
 pub struct WebAuthnHunter {
@@ -120,7 +125,7 @@ impl WebAuthnConfig {
     }
     
     fn get_default_windows_hello_paths() -> Vec<PathBuf> {
-        let mut paths = Vec::new();
+        let paths = Vec::new();
         
         #[cfg(target_os = "windows")]
         {
@@ -241,30 +246,25 @@ impl WebAuthnHunter {
         let content = fs::read(db_path)?;
         
         // Look for WebAuthn-specific patterns
-        let webauthn_patterns = [
-            b"webauthn",
-            b"public_key",
-            b"authenticator",
-            b"credential_id",
-            b"user_handle",
-            b"rp_id",
-            b"attestation",
-            b"allowCredentials",
+        let webauthn_patterns = vec![
+            b"webauthn".as_slice(),
+            b"public_key".as_slice(),
+            b"authenticator".as_slice(),
+            b"credential_id".as_slice(),
+            b"user_handle".as_slice(),
+            b"rp_id".as_slice(),
+            b"attestation".as_slice(),
+            b"allowCredentials".as_slice(),
         ];
         
         for (offset, pattern) in self.scan_for_patterns(&content, &webauthn_patterns) {
-            results.push(DetectionResult {
-                credential_type: CredentialType::WebAuthn,
-                location: format!("{}:0x{:x}", db_path.display(), offset),
-                value: format!("WebAuthn pattern: {}", String::from_utf8_lossy(pattern)),
-                context: format!("Chrome Web Data database"),
-                risk_level: RiskLevel::High,
-                metadata: std::collections::HashMap::from([
-                    ("browser".to_string(), "Chrome".to_string()),
-                    ("file_type".to_string(), "SQLite".to_string()),
-                    ("pattern".to_string(), String::from_utf8_lossy(pattern).to_string()),
-                ]),
-            });
+            results.push(self.create_webauthn_detection_result(
+                CredentialType::WebAuthn,
+                &format!("{}:0x{:x}", db_path.display(), offset),
+                &format!("WebAuthn pattern: {}", String::from_utf8_lossy(pattern)),
+                "Chrome Web Data database",
+                RiskLevel::High,
+            ));
         }
         
         Ok(results)
@@ -279,27 +279,22 @@ impl WebAuthnHunter {
         let content = fs::read(db_path)?;
         
         // Look for passkey-related patterns in login data
-        let passkey_patterns = [
-            b"passkey",
-            b"webauthn_credential",
-            b"public_key_credential",
-            b"authenticator_data",
-            b"client_data_json",
+        let passkey_patterns = vec![
+            b"passkey".as_slice(),
+            b"webauthn_credential".as_slice(),
+            b"public_key_credential".as_slice(),
+            b"authenticator_data".as_slice(),
+            b"client_data_json".as_slice(),
         ];
         
         for (offset, pattern) in self.scan_for_patterns(&content, &passkey_patterns) {
-            results.push(DetectionResult {
-                credential_type: CredentialType::Passkey,
-                location: format!("{}:0x{:x}", db_path.display(), offset),
-                value: format!("Passkey pattern: {}", String::from_utf8_lossy(pattern)),
-                context: format!("Chrome Login Data database"),
-                risk_level: RiskLevel::High,
-                metadata: std::collections::HashMap::from([
-                    ("browser".to_string(), "Chrome".to_string()),
-                    ("file_type".to_string(), "SQLite".to_string()),
-                    ("pattern".to_string(), String::from_utf8_lossy(pattern).to_string()),
-                ]),
-            });
+            results.push(self.create_webauthn_detection_result(
+                CredentialType::Passkey,
+                &format!("{}:0x{:x}", db_path.display(), offset),
+                &format!("Passkey pattern: {}", String::from_utf8_lossy(pattern)),
+                "Chrome Login Data database",
+                RiskLevel::High,
+            ));
         }
         
         Ok(results)
@@ -345,25 +340,21 @@ impl WebAuthnHunter {
         
         let content = fs::read(db_path)?;
         
-        let webauthn_patterns = [
-            b"webauthn",
-            b"publickey",
-            b"credential",
-            b"navigator.credentials",
+        let webauthn_patterns = vec![
+            b"webauthn".as_slice(),
+            b"publickey".as_slice(),
+            b"credential".as_slice(),
+            b"navigator.credentials".as_slice(),
         ];
         
         for (offset, pattern) in self.scan_for_patterns(&content, &webauthn_patterns) {
-            results.push(DetectionResult {
-                credential_type: CredentialType::WebAuthn,
-                location: format!("{}:0x{:x}", db_path.display(), offset),
-                value: format!("Firefox WebAuthn: {}", String::from_utf8_lossy(pattern)),
-                context: format!("Firefox WebAuthn database"),
-                risk_level: RiskLevel::High,
-                metadata: std::collections::HashMap::from([
-                    ("browser".to_string(), "Firefox".to_string()),
-                    ("file_type".to_string(), "SQLite".to_string()),
-                ]),
-            });
+            results.push(self.create_webauthn_detection_result(
+                CredentialType::WebAuthn,
+                &format!("{}:0x{:x}", db_path.display(), offset),
+                &format!("Firefox WebAuthn: {}", String::from_utf8_lossy(pattern)),
+                "Firefox WebAuthn database",
+                RiskLevel::High,
+            ));
         }
         
         Ok(results)
@@ -376,25 +367,21 @@ impl WebAuthnHunter {
         
         let content = fs::read(db_path)?;
         
-        let key_patterns = [
-            b"webauthn",
-            b"fido",
-            b"u2f",
-            b"authenticator",
+        let key_patterns = vec![
+            b"webauthn".as_slice(),
+            b"fido".as_slice(),
+            b"u2f".as_slice(),
+            b"authenticator".as_slice(),
         ];
         
         for (offset, pattern) in self.scan_for_patterns(&content, &key_patterns) {
-            results.push(DetectionResult {
-                credential_type: CredentialType::WebAuthn,
-                location: format!("{}:0x{:x}", db_path.display(), offset),
-                value: format!("Firefox Key: {}", String::from_utf8_lossy(pattern)),
-                context: format!("Firefox key database"),
-                risk_level: RiskLevel::Medium,
-                metadata: std::collections::HashMap::from([
-                    ("browser".to_string(), "Firefox".to_string()),
-                    ("file_type".to_string(), "SQLite".to_string()),
-                ]),
-            });
+            results.push(self.create_webauthn_detection_result(
+                CredentialType::WebAuthn,
+                &format!("{}:0x{:x}", db_path.display(), offset),
+                &format!("Firefox Key: {}", String::from_utf8_lossy(pattern)),
+                "Firefox key database",
+                RiskLevel::Medium,
+            ));
         }
         
         Ok(results)
@@ -405,8 +392,8 @@ impl WebAuthnHunter {
         self.hunt_chrome_webauthn(base_path).await.map(|mut results| {
             // Update browser metadata
             for result in &mut results {
-                result.metadata.insert("browser".to_string(), "Edge".to_string());
-                result.context = result.context.replace("Chrome", "Edge");
+                // Update the context to reflect Edge instead of Chrome
+                result.context.surrounding_text = result.context.surrounding_text.replace("Chrome", "Edge");
             }
             results
         })
@@ -431,28 +418,24 @@ impl WebAuthnHunter {
             if path.is_file() {
                 let content = fs::read(&path)?;
                 
-                let hello_patterns = [
-                    b"Windows Hello",
-                    b"PIN",
-                    b"Biometric",
-                    b"TPM",
-                    b"FIDO",
-                    b"WebAuthn",
-                    b"Microsoft Passport",
+                let hello_patterns = vec![
+                    b"Windows Hello".as_slice(),
+                    b"PIN".as_slice(),
+                    b"Biometric".as_slice(),
+                    b"TPM".as_slice(),
+                    b"FIDO".as_slice(),
+                    b"WebAuthn".as_slice(),
+                    b"Microsoft Passport".as_slice(),
                 ];
                 
                 for (offset, pattern) in self.scan_for_patterns(&content, &hello_patterns) {
-                    results.push(DetectionResult {
-                        credential_type: CredentialType::WindowsHello,
-                        location: format!("{}:0x{:x}", path.display(), offset),
-                        value: format!("Windows Hello: {}", String::from_utf8_lossy(pattern)),
-                        context: format!("Windows Hello credential store"),
-                        risk_level: RiskLevel::Critical,
-                        metadata: std::collections::HashMap::from([
-                            ("system".to_string(), "Windows Hello".to_string()),
-                            ("file_type".to_string(), "Credential".to_string()),
-                        ]),
-                    });
+                    results.push(self.create_webauthn_detection_result(
+                        CredentialType::WindowsHello,
+                        &format!("{}:0x{:x}", path.display(), offset),
+                        &format!("Windows Hello: {}", String::from_utf8_lossy(pattern)),
+                        "Windows Hello credential store",
+                        RiskLevel::Critical,
+                    ));
                 }
             }
         }
@@ -465,7 +448,7 @@ impl WebAuthnHunter {
         Ok(Vec::new())
     }
     
-    fn scan_for_patterns(&self, content: &[u8], patterns: &[&[u8]]) -> Vec<(usize, &[u8])> {
+    fn scan_for_patterns<'a>(&self, content: &[u8], patterns: &[&'a [u8]]) -> Vec<(usize, &'a [u8])> {
         let mut matches = Vec::new();
         
         for &pattern in patterns {
@@ -477,6 +460,102 @@ impl WebAuthnHunter {
         }
         
         matches
+    }
+    
+    /// Helper function to create properly structured DetectionResult
+    fn create_webauthn_detection_result(
+        &self,
+        credential_type: CredentialType,
+        location_path: &str,
+        value: &str,
+        context_description: &str,
+        risk_level: RiskLevel,
+    ) -> DetectionResult {
+        let masked_value = self.mask_value(value);
+        
+        DetectionResult {
+            id: Uuid::new_v4(),
+            credential_type: credential_type.clone(),
+            confidence: ConfidenceLevel::High,
+            masked_value,
+            full_value: None, // Never store full value in production
+            location: CredentialLocation {
+                source_type: "file".to_string(),
+                path: location_path.to_string(),
+                line_number: None,
+                column: None,
+                memory_address: None,
+                process_id: None,
+                container_id: None,
+            },
+            context: CredentialContext {
+                surrounding_text: context_description.to_string(),
+                variable_name: None,
+                file_type: Some("database".to_string()),
+                language: None,
+                context_clues: Vec::new(),
+            },
+            metadata: DetectionMetadata {
+                detection_methods: vec!["pattern_matching".to_string()],
+                pattern_name: Some("webauthn_signature".to_string()),
+                entropy_score: None,
+                ml_confidence: None,
+                yara_matches: Vec::new(),
+                processing_time_us: 0,
+            },
+            risk_level: risk_level.clone(),
+            recommended_actions: self.get_recommended_actions(&credential_type, &risk_level),
+            timestamp: Utc::now(),
+        }
+    }
+    
+    /// Helper function to mask sensitive values
+    fn mask_value(&self, value: &str) -> String {
+        if value.len() <= 8 {
+            "*".repeat(value.len())
+        } else {
+            format!("{}***{}", &value[..3], &value[value.len()-3..])
+        }
+    }
+    
+    /// Get recommended actions based on credential type and risk level
+    fn get_recommended_actions(&self, credential_type: &CredentialType, risk_level: &RiskLevel) -> Vec<String> {
+        let mut actions = Vec::new();
+        
+        match risk_level {
+            RiskLevel::Critical => {
+                actions.push("IMMEDIATE: Review and rotate WebAuthn credentials".to_string());
+                actions.push("IMMEDIATE: Check for unauthorized access".to_string());
+                actions.push("Audit authenticator usage".to_string());
+            }
+            RiskLevel::High => {
+                actions.push("Review WebAuthn credential usage".to_string());
+                actions.push("Implement additional security monitoring".to_string());
+                actions.push("Verify relying party configurations".to_string());
+            }
+            RiskLevel::Medium => {
+                actions.push("Monitor WebAuthn credential activity".to_string());
+                actions.push("Review browser security settings".to_string());
+            }
+            _ => {
+                actions.push("Document credential location".to_string());
+                actions.push("Implement routine security reviews".to_string());
+            }
+        }
+        
+        match credential_type {
+            CredentialType::WindowsHello => {
+                actions.push("Review Windows Hello configuration".to_string());
+                actions.push("Check TPM security settings".to_string());
+            }
+            CredentialType::Passkey => {
+                actions.push("Verify passkey registration".to_string());
+                actions.push("Review cross-platform authenticator settings".to_string());
+            }
+            _ => {}
+        }
+        
+        actions
     }
     
     pub async fn extract_webauthn_metadata(&self, db_path: &Path) -> Result<WebAuthnMetadata> {
@@ -494,7 +573,7 @@ impl WebAuthnHunter {
     
     fn count_webauthn_entries(&self, content: &[u8]) -> usize {
         // Count potential WebAuthn entries by looking for common patterns
-        let patterns = [b"webauthn", b"credential_id", b"public_key"];
+        let patterns = vec![b"webauthn".as_slice(), b"credential_id".as_slice(), b"public_key".as_slice()];
         let mut count = 0;
         
         for pattern in &patterns {
@@ -508,7 +587,8 @@ impl WebAuthnHunter {
         let mut rps = Vec::new();
         
         // Simple extraction - look for domain patterns after "rp_id"
-        if let Ok(content_str) = String::from_utf8_lossy(content).into_owned().into() {
+        let content_str = String::from_utf8_lossy(content).into_owned();
+        {
             // This would be more sophisticated in a real implementation
             if content_str.contains("github.com") {
                 rps.push("github.com".to_string());
@@ -566,7 +646,7 @@ mod tests {
     async fn test_pattern_scanning() {
         let hunter = WebAuthnHunter::new();
         let content = b"test webauthn credential_id data";
-        let patterns = [b"webauthn", b"credential_id"];
+        let patterns = vec![b"webauthn".as_slice(), b"credential_id".as_slice()];
         
         let matches = hunter.scan_for_patterns(content, &patterns);
         assert_eq!(matches.len(), 2);

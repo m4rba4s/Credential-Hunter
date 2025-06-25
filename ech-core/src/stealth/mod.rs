@@ -27,6 +27,7 @@ pub mod polymorphism;
 pub mod detection;
 pub mod advanced_evasion;
 pub mod hardware;
+pub mod lsa_bypass;
 
 pub use engine::{StealthEngine, StealthConfig, StealthLevel, OperationalMode};
 pub use evasion::{EdrEvasion, AvEvasion, EvasionTechnique, EvasionResult};
@@ -38,6 +39,7 @@ pub use polymorphism::{RuntimeMutation, PolymorphicEngine, MutationStrategy};
 pub use detection::{AntiDetection, DetectionEvasion, ThreatDetection};
 pub use advanced_evasion::{AdvancedEvasionEngine, AdvancedEvasionTechniques, EvasionStatus};
 pub use hardware::{HardwareStealth, CpuFeatures, ThermalData};
+pub use lsa_bypass::{LsaBypass, LsaBypassConfig, LsaCredential, LsaCredentialType, WindowsVersion, BypassCapabilities};
 
 use anyhow::Result;
 use std::sync::Arc;

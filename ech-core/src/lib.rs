@@ -16,32 +16,25 @@
 //#![deny(unsafe_code)]
 
 // Core modules
+pub mod error;
+pub mod types;
 pub mod core;
 pub mod detection;
 pub mod memory;
-pub mod filesystem;
-pub mod siem;
 pub mod stealth;
-pub mod container;
-pub mod remediation;
-pub mod processing;
 
 // Re-export commonly used types
+// ELITE CORE EXPORTS - NO BLOAT!
 pub use core::{EchConfig, EchEngine, SecurityContext, Platform};
 pub use detection::{DetectionEngine, DetectionResult, CredentialType};
-pub use memory::{MemoryScanner, ProcessManager, MemoryConfig};
-pub use filesystem::{FilesystemHunter, ScanTarget, HunterConfig};
-pub use siem::{SiemIntegration, SiemConfig, SiemPlatform};
 pub use stealth::{StealthEngine, StealthConfig, StealthLevel};
 
 pub mod prelude {
+    pub use crate::error::{EchError, EchResult};
+    pub use crate::types::*;
     pub use crate::core::*;
     pub use crate::detection::*;
-    pub use crate::memory::*;
-    pub use crate::filesystem::*;
-    pub use crate::siem::*;
     pub use crate::stealth::*;
-    pub use crate::processing::*;
 }
 
 /// ECH library version
@@ -59,8 +52,6 @@ pub async fn initialize() -> anyhow::Result<()> {
     
     // Initialize subsystems
     memory::initialize_memory_subsystem().await?;
-    filesystem::initialize_filesystem_subsystem().await?;
-    siem::initialize_siem_subsystem().await?;
     stealth::initialize_stealth_subsystem().await?;
     
     tracing::info!("ECH Library v{} initialized", VERSION);
@@ -92,7 +83,7 @@ mod tests {
     fn test_exports() {
         // Test that main exports are available
         let _config = EchConfig::default();
-        let _memory_config = MemoryConfig::default();
+        let _memory_config = crate::memory::MemoryConfig::default();
         let _stealth_level = StealthLevel::Medium;
     }
 }

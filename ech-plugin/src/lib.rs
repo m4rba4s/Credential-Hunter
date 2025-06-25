@@ -27,13 +27,13 @@ pub enum PluginCapability {
 }
 
 pub trait Plugin: Send + Sync {
-    fn metadata(&self) -> &PluginMetadata;
+    fn metadata(&self) -> PluginMetadata;
     
-    async fn initialize(&mut self) -> Result<()>;
+    fn initialize(&self) -> Result<()>;
     
-    async fn execute(&self, context: &PluginContext) -> Result<PluginResult>;
+    fn execute(&self, context: &PluginContext) -> Result<PluginResult>;
     
-    async fn cleanup(&mut self) -> Result<()>;
+    fn cleanup(&self) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]

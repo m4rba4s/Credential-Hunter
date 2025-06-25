@@ -26,6 +26,4 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
-[[bin]]
-name = "ech-plugin"
-path = "src/main.rs"
+# No binary - this is a library crate only

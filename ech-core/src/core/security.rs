@@ -331,7 +331,7 @@ pub struct TamperDetectionState {
 }
 
 /// Encrypted data container
-#[derive(ZeroizeOnDrop)]
+#[derive(Debug)]
 pub struct EncryptedData {
     /// Encrypted content
     pub ciphertext: Vec<u8>,
@@ -400,9 +400,12 @@ impl SecurityContext {
     /// Validate current privileges
     pub fn validate_privileges(&self) -> bool {
         // This would check actual privileges in a real implementation
-        if cfg!(target_os = "windows") {
+        #[cfg(target_os = "windows")]
+        {
             self.validate_windows_privileges()
-        } else {
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
             self.validate_unix_privileges()
         }
     }
@@ -663,7 +666,7 @@ impl SecurityContext {
     
     /// Validate Windows privileges
     #[cfg(windows)]
-    fn validate_windows_privileges(&self) -> bool {
+    pub fn validate_windows_privileges(&self) -> bool {
         // Check if we have necessary privileges
         true // Simplified for demo
     }

@@ -120,17 +120,20 @@ pub enum CredentialType {
     SendGridApiKey,
     JwtToken,
     BearerToken,
+    OAuthToken,
     
     // Cryptographic Material
     RsaPrivateKey,
     EcdsaPrivateKey,
     Ed25519PrivateKey,
+    PrivateKey,
     X509Certificate,
     PemCertificate,
     
     // Authentication
     Password,
     ApiSecret,
+    GenericUsername,
     SessionToken,
     OauthToken,
     WebAuthn,
@@ -148,6 +151,54 @@ pub enum CredentialType {
     
     // Custom Pattern
     Custom(String),
+}
+
+impl std::fmt::Display for CredentialType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CredentialType::AwsAccessKey => write!(f, "AWS Access Key"),
+            CredentialType::AwsSecretKey => write!(f, "AWS Secret Key"), 
+            CredentialType::AwsSessionToken => write!(f, "AWS Session Token"),
+            CredentialType::AzureClientSecret => write!(f, "Azure Client Secret"),
+            CredentialType::AzureStorageKey => write!(f, "Azure Storage Key"),
+            CredentialType::GcpServiceKey => write!(f, "GCP Service Key"),
+            CredentialType::GcpApiKey => write!(f, "GCP API Key"),
+            CredentialType::DatabasePassword => write!(f, "Database Password"),
+            CredentialType::MongoDbConnectionString => write!(f, "MongoDB Connection String"),
+            CredentialType::RedisPassword => write!(f, "Redis Password"),
+            CredentialType::PostgreSqlPassword => write!(f, "PostgreSQL Password"),
+            CredentialType::MySqlPassword => write!(f, "MySQL Password"),
+            CredentialType::GitHubToken => write!(f, "GitHub Token"),
+            CredentialType::SlackToken => write!(f, "Slack Token"),
+            CredentialType::StripeApiKey => write!(f, "Stripe API Key"),
+            CredentialType::TwilioApiKey => write!(f, "Twilio API Key"),
+            CredentialType::SendGridApiKey => write!(f, "SendGrid API Key"),
+            CredentialType::ApiSecret => write!(f, "API Secret"),
+            CredentialType::OAuthToken => write!(f, "OAuth Token"),
+            CredentialType::OauthToken => write!(f, "OAuth Token"),
+            CredentialType::JwtToken => write!(f, "JWT Token"),
+            CredentialType::BearerToken => write!(f, "Bearer Token"),
+            CredentialType::RsaPrivateKey => write!(f, "RSA Private Key"),
+            CredentialType::EcdsaPrivateKey => write!(f, "ECDSA Private Key"),
+            CredentialType::Ed25519PrivateKey => write!(f, "Ed25519 Private Key"),
+            CredentialType::PrivateKey => write!(f, "Private Key"),
+            CredentialType::X509Certificate => write!(f, "X509 Certificate"),
+            CredentialType::PemCertificate => write!(f, "Certificate"),
+            CredentialType::Password => write!(f, "Password"),
+            CredentialType::GenericUsername => write!(f, "Username"),
+            CredentialType::SessionToken => write!(f, "Session Token"),
+            CredentialType::WebAuthn => write!(f, "WebAuthn Credential"),
+            CredentialType::Passkey => write!(f, "Passkey"),
+            CredentialType::WindowsHello => write!(f, "Windows Hello"),
+            CredentialType::SocialSecurityNumber => write!(f, "Social Security Number"),
+            CredentialType::CreditCardNumber => write!(f, "Credit Card Number"),
+            CredentialType::EmailAddress => write!(f, "Email Address"),
+            CredentialType::PhoneNumber => write!(f, "Phone Number"),
+            CredentialType::HighEntropyString => write!(f, "High Entropy String"),
+            _ => write!(f, "Unknown Credential Type"),
+            CredentialType::Custom(s) => write!(f, "Custom: {}", s),
+        }
+    }
 }
 
 /// Confidence levels for detections
@@ -351,7 +402,7 @@ impl DetectionEngine {
         };
         
         #[cfg(not(feature = "yara-integration"))]
-        let _yara_scanner = None;
+        let _yara_scanner: Option<()> = None;
         
         let stats = Arc::new(RwLock::new(DetectionStats::default()));
         
@@ -404,9 +455,9 @@ impl DetectionEngine {
                 .analyze_text(content)
                 .await;
             
-            for entropy_match in entropy_matches {
+            for entropy_result in entropy_matches {
                 if let Some(result) = self.process_entropy_match(
-                    entropy_match,
+                    entropy_result,
                     &location,
                     content,
                 ).await? {
@@ -469,6 +520,31 @@ impl DetectionEngine {
         Ok(results)
     }
     
+    /// Detect credentials in raw data - unified interface for tests
+    pub async fn scan_data(
+        &self,
+        data: &[u8],
+        source: &str,
+    ) -> Result<Vec<DetectionResult>> {
+        let location = CredentialLocation {
+            source_type: "memory".to_string(),
+            path: source.to_string(),
+            line_number: None,
+            column: None,
+            memory_address: None,
+            process_id: None,
+            container_id: None,
+        };
+        
+        // Try to convert to string first
+        if let Ok(text) = std::str::from_utf8(data) {
+            self.detect_in_text(text, location).await
+        } else {
+            // Binary data
+            self.detect_in_binary(data, location).await
+        }
+    }
+    
     /// Create detection result from pattern match
     async fn create_detection_result(
         &self,
@@ -518,15 +594,15 @@ impl DetectionEngine {
     /// Process entropy-based match
     async fn process_entropy_match(
         &self,
-        entropy_match: EntropyMatch,
+        entropy_result: crate::detection::entropy::EntropyResult,
         location: &CredentialLocation,
         content: &str,
     ) -> Result<Option<DetectionResult>> {
         // Enhanced entropy analysis with context
-        let context_text = self.extract_context(content, entropy_match.start, entropy_match.end);
-        let credential_type = self.infer_credential_type(&entropy_match.value, &context_text);
+        let context_text = self.extract_context(content, entropy_result.start, entropy_result.end);
+        let credential_type = self.infer_credential_type(&entropy_result.value, &context_text);
         
-        let confidence = self.calculate_entropy_confidence(entropy_match.entropy_score);
+        let confidence = self.calculate_entropy_confidence(entropy_result.entropy);
         
         if confidence < self.config.min_confidence {
             return Ok(None);
@@ -536,8 +612,8 @@ impl DetectionEngine {
             id: Uuid::new_v4(),
             credential_type: credential_type.clone(),
             confidence,
-            masked_value: self.mask_value(&entropy_match.value),
-            full_value: if self.is_dry_run() { Some(entropy_match.value) } else { None },
+            masked_value: self.mask_value(&entropy_result.value),
+            full_value: if self.is_dry_run() { Some(entropy_result.value) } else { None },
             location: location.clone(),
             context: CredentialContext {
                 surrounding_text: context_text.clone(),
@@ -549,7 +625,7 @@ impl DetectionEngine {
             metadata: DetectionMetadata {
                 detection_methods: vec!["entropy_analysis".to_string()],
                 pattern_name: None,
-                entropy_score: Some(entropy_match.entropy_score),
+                entropy_score: Some(entropy_result.entropy),
                 ml_confidence: None,
                 yara_matches: Vec::new(),
                 processing_time_us: 0,
@@ -565,7 +641,7 @@ impl DetectionEngine {
     /// Process ML classification result
     async fn process_ml_result(
         &self,
-        ml_result: MLResult,
+        ml_result: crate::detection::classifier::MLResult,
         location: &CredentialLocation,
         content: &str,
     ) -> Result<Option<DetectionResult>> {
@@ -611,7 +687,7 @@ impl DetectionEngine {
         mut results: Vec<DetectionResult>,
         content: &str,
     ) -> Result<Vec<DetectionResult>> {
-        let validated_results = Vec::new();
+        let mut validated_results = Vec::new();
         
         for mut result in results {
             let validation_score = self.context_analyzer
@@ -788,14 +864,7 @@ struct EntropyMatch {
     entropy_score: f64,
 }
 
-#[derive(Debug)]
-struct MLResult {
-    value: String,
-    start: usize,
-    end: usize,
-    credential_type: CredentialType,
-    confidence: f64,
-}
+// MLResult moved to classifier module for better architecture
 
 #[derive(Debug)]
 struct BinaryString {

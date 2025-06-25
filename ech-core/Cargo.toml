@@ -88,3 +88,10 @@ windows-service = { workspace = true, optional = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = { workspace = true, optional = true }
 mach2 = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Testing dependencies - элитные тесты требуют элитных инструментов!
+tokio-test = "0.4"
+tempfile = "3.8" 
+assert_cmd = "2.0"
+predicates = "3.0"

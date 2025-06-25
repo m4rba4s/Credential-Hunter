@@ -33,34 +33,34 @@ impl PluginRuntime {
         Ok(plugin_name)
     }
     
-    pub async fn execute_plugin(&self, name: &str, context: PluginContext) -> Result<PluginResult> {
+    pub fn execute_plugin(&self, name: &str, context: PluginContext) -> Result<PluginResult> {
         if let Some(plugin) = self.loaded_plugins.get(name) {
-            plugin.execute(&context).await
+            plugin.execute(&context)
         } else {
             Err(anyhow::anyhow!("Plugin '{}' not found", name))
         }
     }
     
-    pub fn list_plugins(&self) -> Vec<&PluginMetadata> {
+    pub fn list_plugins(&self) -> Vec<PluginMetadata> {
         self.loaded_plugins
             .values()
             .map(|p| p.metadata())
             .collect()
     }
     
-    pub async fn unload_plugin(&mut self, name: &str) -> Result<()> {
+    pub fn unload_plugin(&mut self, name: &str) -> Result<()> {
         if let Some(mut plugin) = self.loaded_plugins.remove(name) {
-            plugin.cleanup().await?;
+            plugin.cleanup()?;
             tracing::info!("Unloaded plugin: {}", name);
         }
         Ok(())
     }
     
-    pub async fn shutdown(&mut self) -> Result<()> {
+    pub fn shutdown(&mut self) -> Result<()> {
         let plugin_names: Vec<String> = self.loaded_plugins.keys().cloned().collect();
         
         for name in plugin_names {
-            self.unload_plugin(&name).await?;
+            self.unload_plugin(&name)?;
         }
         
         Ok(())

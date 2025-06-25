@@ -28,4 +28,4 @@ pub use platform::Platform;
 pub use metrics::Metrics;
 pub use scheduler::TaskScheduler;
 pub use zero_copy::ZeroCopyScanner;
-pub use lockfree::{LockFreeQueue, LockFreeHashMap, ConcurrentCredentialBuffer};
+pub use lockfree::{LockFreeQueue, LockFreeHashMap};

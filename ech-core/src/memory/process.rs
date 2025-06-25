@@ -16,6 +16,7 @@
 
 use anyhow::{Context, Result};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tracing::{debug, warn, error, trace};
 use chrono::{DateTime, Utc};
@@ -26,7 +27,7 @@ use super::regions::{MemoryRegion, RegionType, RegionPermissions, MemoryMap};
 /// Cross-platform process manager
 pub struct ProcessManager {
     /// Platform-specific implementation
-    platform_impl: Box<dyn ProcessManagerImpl + Send + Sync>,
+    platform_impl: Arc<dyn ProcessManagerImpl + Send + Sync>,
     
     /// Process cache
     process_cache: std::sync::Mutex<HashMap<u32, (ProcessInfo, SystemTime)>>,
@@ -233,20 +234,20 @@ impl ProcessManager {
     pub async fn new() -> Result<Self> {
         debug!("🔧 Initializing Process Manager");
         
-        let platform_impl: Box<dyn ProcessManagerImpl + Send + Sync> = {
+        let platform_impl: Arc<dyn ProcessManagerImpl + Send + Sync> = {
             #[cfg(target_os = "linux")]
             {
-                Box::new(LinuxProcessManager::new()?)
+                Arc::new(LinuxProcessManager::new()?)
             }
             
             #[cfg(target_os = "windows")]
             {
-                Box::new(WindowsProcessManager::new()?)
+                Arc::new(WindowsProcessManager::new()?)
             }
             
             #[cfg(target_os = "macos")]
             {
-                Box::new(MacOSProcessManager::new()?)
+                Arc::new(MacOSProcessManager::new()?)
             }
             
             #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
@@ -272,7 +273,7 @@ impl ProcessManager {
         debug!("📋 Enumerating all processes");
         
         let processes = tokio::task::spawn_blocking({
-            let platform_impl = &*self.platform_impl;
+            let platform_impl = Arc::clone(&self.platform_impl);
             move || platform_impl.get_all_processes()
         }).await
         .context("Process enumeration task failed")??;
@@ -295,7 +296,7 @@ impl ProcessManager {
         }
         
         let info = tokio::task::spawn_blocking({
-            let platform_impl = &*self.platform_impl;
+            let platform_impl = Arc::clone(&self.platform_impl);
             move || platform_impl.get_process_info(pid)
         }).await
         .context("Process info task failed")??;
@@ -341,69 +342,34 @@ impl ProcessManager {
     
     /// Check if process matches criteria
     fn matches_criteria(&self, process: &ProcessInfo, criteria: &ProcessContext) -> bool {
-        // Check name patterns
-        if !criteria.name_patterns.is_empty() {
-            let name_lower = process.name.to_lowercase();
-            let matches_pattern = criteria.name_patterns.iter().any(|pattern| {
-                let pattern_lower = pattern.to_lowercase();
-                if pattern.contains('*') {
-                    // Simple wildcard matching
-                    let pattern_parts: Vec<&str> = pattern_lower.split('*').collect();
-                    if pattern_parts.len() == 2 {
-                        name_lower.starts_with(pattern_parts[0]) && name_lower.ends_with(pattern_parts[1])
-                    } else {
-                        name_lower.contains(&pattern_lower.replace('*', ""))
-                    }
-                } else {
-                    name_lower.contains(&pattern_lower)
-                }
-            });
-            
-            if !matches_pattern {
-                return false;
-            }
-        }
-        
-        // Check memory usage
-        let memory_mb = process.memory_usage / 1024 / 1024;
-        if let Some(min_memory) = criteria.min_memory_mb {
-            if memory_mb < min_memory {
-                return false;
-            }
-        }
-        if let Some(max_memory) = criteria.max_memory_mb {
-            if memory_mb > max_memory {
-                return false;
-            }
-        }
-        
-        // Check process age
-        if let Some(max_age_hours) = criteria.max_age_hours {
-            let process_age = Utc::now().signed_duration_since(process.start_time);
-            if process_age.num_hours() > max_age_hours as i64 {
-                return false;
-            }
-        }
-        
-        // Check user filter
-        if let Some(ref user_filter) = criteria.user_filter {
-            if process.user != *user_filter {
-                return false;
-            }
-        }
-        
-        // Check system process exclusion
-        if criteria.exclude_system && process.is_system {
+        // Check if process name matches the criteria process name
+        if process.name != criteria.info.name && !criteria.info.name.is_empty() {
             return false;
         }
         
-        true
+        // Check memory accessibility requirement
+        if !criteria.memory_accessible {
+            return false;
+        }
+        
+        // Check scan permissions
+        if !criteria.scan_permissions.read_memory {
+            return false;
+        }
+        
+        // Check risk level (only scan appropriate processes based on risk level)
+        match criteria.risk_level {
+            ProcessRiskLevel::Low => process.memory_usage > 50 * 1024 * 1024, // > 50MB
+            ProcessRiskLevel::Medium => process.memory_usage > 100 * 1024 * 1024, // > 100MB  
+            ProcessRiskLevel::High => true, // Always scan high-risk
+            ProcessRiskLevel::Critical => false, // Avoid scanning critical processes
+        }
     }
     
     /// Get memory map for process
     pub async fn get_memory_map(&self, pid: u32) -> Result<MemoryMap> {
         let memory_map = tokio::task::spawn_blocking({
-            let platform_impl = &*self.platform_impl;
+            let platform_impl = Arc::clone(&self.platform_impl);
             move || platform_impl.get_memory_map(pid)
         }).await
         .context("Memory map task failed")??;
@@ -415,7 +381,7 @@ impl ProcessManager {
     /// Read process memory
     pub async fn read_process_memory(&self, pid: u32, address: u64, size: usize) -> Result<Vec<u8>> {
         let data = tokio::task::spawn_blocking({
-            let platform_impl = &*self.platform_impl;
+            let platform_impl = Arc::clone(&self.platform_impl);
             move || platform_impl.read_process_memory(pid, address, size)
         }).await
         .context("Memory read task failed")??;
@@ -427,7 +393,7 @@ impl ProcessManager {
     /// Check if process exists
     pub async fn process_exists(&self, pid: u32) -> bool {
         tokio::task::spawn_blocking({
-            let platform_impl = &*self.platform_impl;
+            let platform_impl = Arc::clone(&self.platform_impl);
             move || platform_impl.process_exists(pid)
         }).await
         .unwrap_or(false)
@@ -437,7 +403,7 @@ impl ProcessManager {
     pub async fn create_process_context(&self, pid: u32) -> Result<ProcessContext> {
         let info = self.get_process_info(pid).await?;
         let security_context = tokio::task::spawn_blocking({
-            let platform_impl = &*self.platform_impl;
+            let platform_impl = Arc::clone(&self.platform_impl);
             move || platform_impl.get_security_context(pid)
         }).await
         .context("Security context task failed")??;
@@ -651,7 +617,7 @@ impl ProcessManagerImpl for LinuxProcessManager {
             }
         }
         
-        Ok(MemoryMap { pid, regions })
+        Ok(MemoryMap::new(super::types::ProcessId(pid), regions))
     }
     
     fn parse_maps_line(&self, line: &str) -> Option<MemoryRegion> {
@@ -695,12 +661,12 @@ impl ProcessManagerImpl for LinuxProcessManager {
         };
         
         Some(MemoryRegion {
-            start_address,
-            size,
+            base_address: super::types::MemoryAddress(start_address),
+            size: size as u64,
             permissions,
             region_type,
             module_name: if parts.len() > 5 { Some(parts[5].to_string()) } else { None },
-            protection: "rw".to_string(), // Simplified
+            metadata: std::collections::HashMap::new(),
         })
     }
     

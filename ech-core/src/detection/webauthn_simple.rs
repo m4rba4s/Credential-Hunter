@@ -38,14 +38,13 @@ impl WebAuthnHunter {
             masked_value: "WebAuthn credential found".to_string(),
             full_value: None,
             location: CredentialLocation {
-                file_path: Some("/placeholder/webauthn".to_string()),
+                source_type: "file".to_string(),
+                path: "/placeholder/webauthn".to_string(),
                 line_number: None,
-                column_number: None,
-                byte_offset: None,
+                column: None,
                 memory_address: None,
                 process_id: None,
                 container_id: None,
-                url: None,
             },
             context: CredentialContext {
                 surrounding_text: "WebAuthn credential detected".to_string(),

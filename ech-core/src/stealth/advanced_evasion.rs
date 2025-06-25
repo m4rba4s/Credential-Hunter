@@ -254,12 +254,22 @@ impl AdvancedEvasionEngine {
         info!("🎯 Activating appropriate evasion techniques");
 
         // Activate techniques based on threat level and environment
-        for (name, countermeasure) in &mut self.active_countermeasures {
-            if self.should_activate_technique(name).await? {
+        let names_to_activate: Vec<String> = {
+            let mut names = Vec::new();
+            for name in self.active_countermeasures.keys() {
+                if self.should_activate_technique(name).await? {
+                    names.push(name.clone());
+                }
+            }
+            names
+        };
+        
+        for name in names_to_activate {
+            if let Some(countermeasure) = self.active_countermeasures.get_mut(&name) {
                 match countermeasure.activate() {
                     Ok(_) => {
                         info!("✅ Activated technique: {}", name);
-                        self.context.current_techniques.push(name.clone());
+                        self.context.current_techniques.push(name);
                     },
                     Err(e) => warn!("❌ Failed to activate {}: {}", name, e),
                 }

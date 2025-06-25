@@ -1,0 +1,54 @@
+Enterprise Credential Hunter (ECH) - Commercial License
+
+Copyright (c) 2024 Enterprise Security Solutions
+
+IMPORTANT: READ CAREFULLY BEFORE USING THIS SOFTWARE
+
+This software is licensed for legitimate security testing, red team operations, 
+and digital forensics/incident response (DFIR) activities only.
+
+AUTHORIZED USES:
+- Penetration testing by authorized security professionals
+- Red team exercises within approved organizational boundaries  
+- Digital forensics and incident response investigations
+- Security awareness training and demonstrations
+- Vulnerability assessment and security auditing
+- Authorized compliance testing
+
+PROHIBITED USES:
+- Unauthorized access to systems, networks, or data
+- Malicious attacks or exploitation of vulnerabilities
+- Any illegal activity under applicable laws and regulations
+- Use against systems without explicit written authorization
+- Distribution to unauthorized parties
+- Reverse engineering for malicious purposes
+
+LICENSE TERMS:
+1. This software is provided for evaluation and authorized security testing only
+2. Commercial use requires separate licensing agreement
+3. Users must comply with all applicable laws and regulations
+4. Users must obtain proper authorization before testing any systems
+5. This license may be revoked at any time for violation of terms
+
+DISCLAIMER:
+THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, 
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN 
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+ETHICAL USE STATEMENT:
+Users of this software acknowledge that they will:
+- Only use this software for legitimate security purposes
+- Obtain proper authorization before testing any systems
+- Comply with responsible disclosure practices
+- Respect privacy and confidentiality of data encountered
+- Use the software in accordance with applicable laws and regulations
+
+For commercial licensing, enterprise support, or questions about permitted use, 
+contact: security@ech-enterprise.com
+
+This license is effective until terminated. Your rights under this license will 
+terminate automatically without notice if you fail to comply with any term(s) 
+of this license.

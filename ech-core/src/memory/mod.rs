@@ -16,6 +16,8 @@
  * - Performance-optimized SIMD scanning
  */
 
+pub mod types;
+pub mod dump_analyzer;
 pub mod scanner;
 pub mod process;
 pub mod regions;
@@ -31,6 +33,9 @@ pub use extractor::{CredentialExtractor, ExtractionMethod, MemoryPattern};
 pub use analyzer::{MemoryAnalyzer, AnalysisResult, SuspiciousPattern};
 pub use stealth::{StealthMemoryScanner, AntiDetection, MemoryObfuscation};
 pub use secure_allocator::{SecureAllocator, SecureBuffer, SecureString, SECURE_ALLOCATOR};
+
+// ELITE DUMP ANALYSIS - MIMIKATZ STYLE! 🔥
+pub use dump_analyzer::{MemoryDumpAnalyzer, DumpAnalysisResult, DumpType, DumpAnalysisConfig};
 
 use anyhow::Result;
 use std::sync::Arc;
