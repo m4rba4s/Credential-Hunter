@@ -24,6 +24,7 @@ pub mod siem;
 pub mod stealth;
 pub mod container;
 pub mod remediation;
+pub mod processing;
 
 // Re-export commonly used types
 pub use core::{EchConfig, EchEngine, SecurityContext, Platform};
@@ -33,15 +34,28 @@ pub use filesystem::{FilesystemHunter, ScanTarget, HunterConfig};
 pub use siem::{SiemIntegration, SiemConfig, SiemPlatform};
 pub use stealth::{StealthEngine, StealthConfig, StealthLevel};
 
+pub mod prelude {
+    pub use crate::core::*;
+    pub use crate::detection::*;
+    pub use crate::memory::*;
+    pub use crate::filesystem::*;
+    pub use crate::siem::*;
+    pub use crate::stealth::*;
+    pub use crate::processing::*;
+}
+
 /// ECH library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// ECH library initialization
 pub async fn initialize() -> anyhow::Result<()> {
-    // Initialize logging
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+    // Initialize logging if tracing_subscriber is available
+    #[cfg(feature = "tracing-subscriber")]
+    {
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .init();
+    }
     
     // Initialize subsystems
     memory::initialize_memory_subsystem().await?;

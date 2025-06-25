@@ -20,6 +20,7 @@ pub mod context;
 pub mod classifier;
 pub mod yara_integration;
 pub mod webauthn_simple;
+pub mod webauthn_real;
 
 pub use engine::{DetectionEngine, DetectionResult, CredentialType, ConfidenceLevel, CredentialLocation, RiskLevel};
 pub use patterns::{PatternRegistry, PatternMatch, CustomPattern};
@@ -27,6 +28,7 @@ pub use entropy::EntropyAnalyzer;
 pub use context::ContextAnalyzer;
 pub use classifier::MLClassifier;
 pub use webauthn_simple::{WebAuthnHunter, WebAuthnCredential};
+pub use webauthn_real::{WebAuthnHunter as RealWebAuthnHunter, WebAuthnMetadata};
 
 #[cfg(feature = "yara-integration")]
 pub use yara_integration::YaraScanner;

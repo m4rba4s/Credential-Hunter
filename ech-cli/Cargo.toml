@@ -1,0 +1,35 @@
+[package]
+name = "ech-cli"
+description = "Command-line interface for Enterprise Credential Hunter"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["json-output", "yaml-output"]
+json-output = ["serde_json"]
+yaml-output = ["serde_yaml"]
+interactive = []
+
+[dependencies]
+# Core dependencies
+ech-core = { path = "../ech-core", features = ["tracing-subscriber", "clap"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
+serde_yaml = { workspace = true, optional = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+[[bin]]
+name = "ech"
+path = "src/main.rs"

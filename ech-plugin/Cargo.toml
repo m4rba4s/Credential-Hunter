@@ -1,0 +1,31 @@
+[package]
+name = "ech-plugin"
+description = "Plugin SDK and runtime for extending credential hunting capabilities"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["sdk"]
+sdk = []
+runtime = []
+
+[dependencies]
+# Core dependencies
+ech-core = { path = "../ech-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[[bin]]
+name = "ech-plugin"
+path = "src/main.rs"

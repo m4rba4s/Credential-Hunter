@@ -15,12 +15,13 @@ pub struct ProcessingTask {
     pub task_type: TaskType,
     pub data: Vec<u8>,
     pub priority: Priority,
+    #[serde(skip)]
     pub deadline: Option<Instant>,
     pub retry_count: u32,
     pub max_retries: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum TaskType {
     MemoryScan,
     FilesystemScan,
@@ -32,7 +33,7 @@ pub enum TaskType {
     EntropyAnalysis,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Priority {
     Low = 1,
     Normal = 2,

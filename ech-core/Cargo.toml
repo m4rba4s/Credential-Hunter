@@ -1,0 +1,90 @@
+[package]
+name = "ech-core"
+description = "Core credential hunting engine and detection algorithms"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["stealth", "simd-optimizations"]
+stealth = []
+process-injection = []
+edr-evasion = []
+simd-optimizations = ["wide", "bytemuck", "aligned-vec"]
+forensics = []
+anti-edr = []
+
+# Platform-specific features
+linux-advanced = ["nix", "procfs"]
+windows-advanced = ["winapi", "windows-service"]
+macos-advanced = ["core-foundation", "mach2"]
+
+[dependencies]
+# Core dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+regex = { workspace = true }
+rayon = { workspace = true }
+crossbeam = { workspace = true }
+dashmap = { workspace = true }
+once_cell = { workspace = true }
+parking_lot = { workspace = true }
+memmap2 = { workspace = true }
+
+# Cryptography and security
+ring = { workspace = true }
+aes-gcm = { workspace = true }
+argon2 = { workspace = true }
+zeroize = { workspace = true }
+secrecy = { workspace = true }
+
+# Network and HTTP
+reqwest = { workspace = true }
+url = { workspace = true }
+
+# Entropy and statistical analysis
+statrs = { workspace = true }
+ordered-float = { workspace = true }
+
+# Performance and SIMD optimizations
+wide = { workspace = true, optional = true }
+bytemuck = { workspace = true, optional = true }
+aligned-vec = { workspace = true, optional = true }
+
+# Additional core dependencies
+hex = { workspace = true }
+glob = { workspace = true }
+num_cpus = { workspace = true }
+crossbeam-epoch = { workspace = true }
+rand = { workspace = true }
+
+# CLI and extra dependencies  
+clap = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+crossbeam-channel = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+nix = { workspace = true, optional = true }
+procfs = { workspace = true, optional = true }
+libc = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+inotify = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { workspace = true, optional = true }
+windows-service = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = { workspace = true, optional = true }
+mach2 = { workspace = true, optional = true }

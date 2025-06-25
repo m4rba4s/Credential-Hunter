@@ -135,6 +135,7 @@ pub enum CredentialType {
     OauthToken,
     WebAuthn,
     Passkey,
+    WindowsHello,
     
     // Personal Information
     SocialSecurityNumber,

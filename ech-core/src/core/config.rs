@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+#[cfg(feature = "clap")]
 use clap::ValueEnum;
 use secrecy::{ExposeSecret, Secret};
 use zeroize::Zeroize;
@@ -378,7 +379,8 @@ pub struct OperationConfig {
 }
 
 /// Log levels for enterprise logging
-#[derive(Debug, Clone, ValueEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "clap", derive(ValueEnum))]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Trace,
@@ -389,7 +391,8 @@ pub enum LogLevel {
 }
 
 /// Output formats for scan results
-#[derive(Debug, Clone, ValueEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "clap", derive(ValueEnum))]
 #[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
     Json,

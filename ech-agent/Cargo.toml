@@ -1,0 +1,44 @@
+[package]
+name = "ech-agent"
+description = "Background agent and daemon for continuous credential monitoring"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["network-monitoring", "file-monitoring"]
+network-monitoring = []
+file-monitoring = []
+service-mode = []
+
+[dependencies]
+# Core dependencies
+ech-core = { path = "../ech-core" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# Network and HTTP
+reqwest = { workspace = true }
+url = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+inotify = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { workspace = true, optional = true }
+windows-service = { workspace = true, optional = true }
+
+[[bin]]
+name = "ech-daemon"
+path = "src/daemon.rs"
