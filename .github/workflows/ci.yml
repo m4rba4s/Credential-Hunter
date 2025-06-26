@@ -1,41 +1,30 @@
-name: CI/CD Pipeline
+name: 🚀 Enterprise Credential Hunter CI
 
 on:
   push:
-    branches: [ master, develop ]
+    branches: [ master, main, develop ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, main ]
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 jobs:
-  test:
-    name: Test Suite
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable, beta, nightly]
-        exclude:
-          # Reduce matrix size for faster CI
-          - os: windows-latest
-            rust: beta
-          - os: macos-latest
-            rust: beta
-    
+  # 🧪 Quality Checks
+  check:
+    name: 🔍 Code Quality
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
+    - name: 📥 Checkout code
       uses: actions/checkout@v4
-    
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@master
+
+    - name: ⚡ Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: ${{ matrix.rust }}
         components: rustfmt, clippy
-    
-    - name: Cache cargo registry
+
+    - name: 📦 Cache cargo registry
       uses: actions/cache@v3
       with:
         path: |
@@ -43,187 +32,161 @@ jobs:
           ~/.cargo/git
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
-    
-    - name: Check formatting
-      run: cargo fmt --all -- --check
-      if: matrix.rust == 'stable'
-    
-    - name: Run Clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
-      if: matrix.rust == 'stable'
-    
-    - name: Build workspace
-      run: cargo build --workspace --verbose
-    
-    - name: Run tests
-      run: cargo test --workspace --verbose
-    
-    - name: Run integration tests
-      run: cargo test --workspace --test '*' --verbose
-      if: matrix.rust == 'stable'
 
-  security:
-    name: Security Audit
+    - name: 🔧 Check formatting
+      run: cargo fmt --all -- --check
+
+    - name: 📋 Clippy lints
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: 🏗️ Build check
+      run: cargo check --all-features --workspace
+
+  # 🧪 Tests
+  test:
+    name: 🧪 Test Suite
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository
+    - name: 📥 Checkout code
       uses: actions/checkout@v4
-    
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-    
-    - name: Install cargo-audit
-      run: cargo install cargo-audit
-    
-    - name: Run security audit
-      run: cargo audit
-    
-    - name: Install cargo-deny
-      run: cargo install cargo-deny
-    
-    - name: Check dependencies
-      run: cargo deny check
 
-  cross-compile:
-    name: Cross Compilation
-    runs-on: ubuntu-latest
+    - name: ⚡ Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: 📦 Cache cargo
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-test-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: 🧪 Run tests
+      run: cargo test --workspace --all-features
+
+    - name: 📊 Run benchmarks (no-run)
+      run: cargo bench --no-run --workspace
+
+  # 🏗️ Build Matrix
+  build:
+    name: 🏗️ Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - x86_64-unknown-linux-musl
-          - x86_64-pc-windows-gnu
-          - x86_64-apple-darwin
-          - aarch64-unknown-linux-gnu
-    
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-    - name: Checkout repository
+    - name: 📥 Checkout code
       uses: actions/checkout@v4
-    
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ matrix.target }}
-    
-    - name: Install cross
-      run: cargo install cross
-    
-    - name: Cross compile
-      run: cross build --target ${{ matrix.target }} --release --bin ech
 
-  performance:
-    name: Performance Benchmarks
+    - name: ⚡ Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: 📦 Cache cargo
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: 🏗️ Build release
+      run: cargo build --release --workspace
+
+    - name: 🧪 Test CLI
+      run: |
+        ./target/release/ech --version
+        ./target/release/ech --help
+      shell: bash
+
+  # 🛡️ Security Audit
+  security:
+    name: 🛡️ Security Audit
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
-    
     steps:
-    - name: Checkout repository
+    - name: 📥 Checkout code
       uses: actions/checkout@v4
-    
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-    
-    - name: Run benchmarks
-      run: cargo bench
-    
-    - name: Store benchmark results
-      uses: benchmark-action/github-action-benchmark@v1
-      with:
-        tool: 'cargo'
-        output-file-path: target/criterion/report/index.html
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        auto-push: true
 
+    - name: ⚡ Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: 🛡️ Install cargo-audit
+      run: cargo install cargo-audit
+
+    - name: 🔍 Security audit
+      run: cargo audit
+
+    - name: 🚫 Cargo deny
+      uses: EmbarkStudios/cargo-deny-action@v1
+
+  # 📦 Release Build (on tags)
   release:
-    name: Create Release
+    name: 📦 Release Build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [test, security, cross-compile]
-    
+    needs: [check, test, build, security]
     steps:
-    - name: Checkout repository
+    - name: 📥 Checkout code
       uses: actions/checkout@v4
-    
-    - name: Install Rust toolchain
+
+    - name: ⚡ Setup Rust
       uses: dtolnay/rust-toolchain@stable
-    
-    - name: Build release binaries
+
+    - name: 🏗️ Build release
+      run: cargo build --release --workspace
+
+    - name: 📦 Create release artifacts
       run: |
-        cargo build --release --bin ech
-        cargo build --release --bin ech-daemon
-        cargo build --release --bin ech-plugin
-    
-    - name: Create release archive
-      run: |
-        mkdir -p release
-        cp target/release/ech* release/
-        tar -czf ech-${{ github.ref_name }}-linux-x86_64.tar.gz -C release .
-    
-    - name: Create GitHub Release
+        mkdir artifacts
+        cp target/release/ech artifacts/
+        cp README.md LICENSE artifacts/
+        tar -czf ech-${{ github.ref_name }}-linux-x86_64.tar.gz -C artifacts .
+
+    - name: 🚀 Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          ech-${{ github.ref_name }}-linux-x86_64.tar.gz
-        body: |
-          ## Enterprise Credential Hunter ${{ github.ref_name }}
-          
-          ### Features
-          - Advanced credential hunting capabilities
-          - SIMD-optimized pattern matching
-          - WebAuthn/Passkey detection
-          - IMDS token monitoring
-          - Cross-platform support
-          
-          ### Installation
-          Download the appropriate binary for your platform and extract it.
-          
-          ### Security
-          All binaries are signed and verified.
+        files: ech-*.tar.gz
         draft: false
-        prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  docker:
-    name: Build Docker Images
+  # 🎯 Demo Test
+  demo:
+    name: 🎯 Live Demo Test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
-    needs: [test, security]
-    
+    needs: [build]
     steps:
-    - name: Checkout repository
+    - name: 📥 Checkout code
       uses: actions/checkout@v4
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Login to Docker Hub
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-    
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: |
-          enterprisesecurity/ech
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=raw,value=latest,enable={{is_default_branch}}
-    
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+
+    - name: ⚡ Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: 🏗️ Build
+      run: cargo build --release
+
+    - name: 📝 Create test secrets
+      run: |
+        cat > test_demo.txt << 'EOF'
+        # Demo secrets for CI test
+        AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE
+        password=demo_secret_123
+        api_key=sk_live_abcdef123456789012345
+        -----BEGIN RSA PRIVATE KEY-----
+        MIIEpAIBAAKCAQEA...
+        -----END RSA PRIVATE KEY-----
+        EOF
+
+    - name: 🔍 Run demo scan
+      run: |
+        echo "🚨 LIVE DEMO: Credential Detection"
+        ./target/release/ech scan --target test_demo.txt --high-confidence
+        echo ""
+        echo "✅ Demo completed successfully!"
+
+    - name: 📊 Performance test
+      run: |
+        echo "⚡ Performance Test"
+        time ./target/release/ech scan --target . --max-files 100

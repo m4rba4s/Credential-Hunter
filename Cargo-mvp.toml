@@ -1,0 +1,83 @@
+[workspace]
+members = [
+    "ech-core",
+    "ech-cli",
+]
+resolver = "2"
+default-members = ["ech-cli"]
+
+[workspace.package]
+version = "1.0.0"
+authors = ["DFIR Team <security@ech-security.com>"]
+edition = "2021"
+license = "Commercial"
+repository = "https://github.com/enterprise-security/ech"
+keywords = ["security", "dfir", "credentials", "hunting", "enterprise"]
+categories = ["command-line-utilities", "development-tools"]
+
+[workspace.dependencies]
+# 🔥 MVP CORE DEPENDENCIES - LEAN AND MEAN!
+# Essential async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# Serialization 
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# CLI framework
+clap = { version = "4.4", features = ["derive"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Utilities
+uuid = { version = "1.0", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1.10"
+
+# 🚀 PERFORMANCE CORE
+rayon = "1.8"           # Parallel processing
+parking_lot = "0.12"    # Better locks
+once_cell = "1.19"      # Lazy statics
+
+# 📊 ENTROPY ANALYSIS  
+statrs = "0.16"         # Statistical analysis
+wide = "0.7"            # SIMD operations
+
+# 🛡️ SECURITY ESSENTIALS
+ring = "0.17"           # Crypto
+zeroize = "1.7"         # Secure memory clearing
+
+# 📁 FILE SYSTEM
+glob = "0.3"            # File matching
+dirs = "5.0"            # Standard directories
+ignore = "0.4"          # Git-aware file walking
+
+# 🖥️ PLATFORM SPECIFIC (minimal)
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+nix = { version = "0.27", features = ["process"] }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winnt", "processthreadsapi"] }
+
+# 🧪 DEV DEPENDENCIES (testing only)
+[workspace.dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.8"
+assert_cmd = "2.0"
+
+# 📦 PROFILES FOR SPEED
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+panic = "abort"

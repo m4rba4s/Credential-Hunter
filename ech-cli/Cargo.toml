@@ -29,6 +29,15 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+regex = { workspace = true }
+
+# 🚀 P2 ENHANCED FEATURES
+ignore = { workspace = true }
+statrs = { workspace = true }
+wide = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [[bin]]
 name = "ech"
