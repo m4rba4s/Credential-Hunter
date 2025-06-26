@@ -1,0 +1,35 @@
+# CODEOWNERS for Enterprise Credential Hunter
+# 
+# This file defines who must review changes to specific parts of the codebase
+# All security-sensitive changes require approval from designated reviewers
+
+# Global ownership - all files require review
+* @mindlock
+
+# Security-critical modules require security team review
+/ech-core/src/stealth/ @mindlock
+/ech-core/src/detection/ @mindlock  
+/ech-core/src/memory/ @mindlock
+/ech-core/src/security/ @mindlock
+
+# Specific high-risk files
+/ech-core/src/stealth/lsa_bypass.rs @mindlock
+/ech-core/src/detection/imds_hunter.rs @mindlock
+/ech-core/src/memory/dump_analyzer.rs @mindlock
+/ech-core/src/core/security.rs @mindlock
+
+# Configuration and infrastructure
+/.github/ @mindlock
+/deny.toml @mindlock
+/SECURITY.md @mindlock
+/THREAT-MAP.md @mindlock
+
+# Dependencies and build system
+/Cargo.toml @mindlock
+/Cargo.lock @mindlock
+/**/Cargo.toml @mindlock
+
+# Documentation that affects security
+/README.md @mindlock
+/ARCHITECTURE.md @mindlock
+/docs/security/ @mindlock

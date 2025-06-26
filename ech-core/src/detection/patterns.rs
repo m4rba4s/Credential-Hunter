@@ -564,7 +564,7 @@ impl PatternRegistry {
         // Check for positive keywords
         for keyword in &metadata.context_keywords {
             if context.contains(&keyword.to_lowercase()) {
-                confidence = (confidence + 0.1).min(1.0);
+                confidence = (confidence + 0.1).min(1.0_f64);
             }
         }
         
@@ -808,7 +808,7 @@ impl PatternRegistry {
             
             // Simulate ML confidence adjustment
             if has_entropy_indicators && context_length > 20 {
-                match_item.confidence_score = (match_item.confidence_score * 1.1).min(1.0);
+                match_item.confidence_score = (match_item.confidence_score * 1.1).min(1.0_f64);
                 match_item.metadata.insert("ml_enhancement".to_string(), "high_entropy_detected".to_string());
             }
             

@@ -67,11 +67,13 @@ glob = { workspace = true }
 num_cpus = { workspace = true }
 crossbeam-epoch = { workspace = true }
 rand = { workspace = true }
+md5 = "0.7"
 
 # CLI and extra dependencies  
 clap = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, optional = true }
 crossbeam-channel = { workspace = true }
+dirs = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 nix = { workspace = true, optional = true }

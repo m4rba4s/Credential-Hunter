@@ -18,6 +18,17 @@ repository = "https://github.com/enterprise-security/ech"
 keywords = ["security", "dfir", "credentials", "hunting", "enterprise"]
 categories = ["command-line-utilities", "development-tools"]
 
+[workspace.dev-dependencies]
+# Testing
+nextest = "0.9"
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.8"
+assert_cmd = "2.0"
+proptest = "1.4"
+mockall = "0.12"
+test-log = "0.2"
+crossbeam-channel = "0.5"
+
 [workspace.dependencies]
 # Core dependencies
 tokio = { version = "1.35", features = ["full"] }
@@ -68,6 +79,7 @@ num_cpus = "1.16"
 crossbeam-epoch = "0.9"
 crossbeam-channel = "0.5"
 rand = "0.8"
+dirs = "5.0"
 
 # Platform-specific dependencies
 libc = "0.2"
@@ -96,17 +108,7 @@ mach2 = "0.4"
 
 
 
-[workspace.dev-dependencies]
-tempfile = "3.8"
-criterion = { version = "0.5", features = ["html_reports"] }
-proptest = "1.4"
-mockall = "0.12"
-test-log = "0.2"
-crossbeam-channel = "0.5"
 
-[workspace.build-dependencies]
-cc = "1.0"
-bindgen = "0.69"
 
 [profile.release]
 opt-level = 3

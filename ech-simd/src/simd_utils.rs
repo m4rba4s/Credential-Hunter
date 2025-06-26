@@ -1,5 +1,4 @@
-use wide::*;
-use aligned_vec::AVec;
+// SIMD utilities - imports will be added as needed
 
 pub fn is_simd_available() -> bool {
     cfg!(any(target_feature = "sse4.1", target_feature = "avx2", target_feature = "neon"))
@@ -15,8 +14,8 @@ pub fn get_optimal_chunk_size() -> usize {
     }
 }
 
-pub fn create_aligned_buffer(size: usize) -> AVec<u8> {
-    AVec::with_capacity(64, size)
+pub fn create_aligned_buffer(size: usize) -> Vec<u8> {
+    Vec::with_capacity(size)
 }
 
 pub struct SimdProcessor {

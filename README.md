@@ -277,31 +277,173 @@ Next-generation evasion with adaptive techniques:
 ./ech --stealth-level paranoid --cpu-jitter --scheduler-randomization
 ```
 
-## 🚀 QUICK START
+## 🚀 Quick Start
+
+### Installation
+
+#### Option 1: Cargo Install (Recommended)
+```bash
+# Install from crates.io
+cargo install enterprise-credential-hunter
+
+# Or install from source
+git clone https://github.com/m4rba4s/Credential-Hunter.git
+cd Credential-Hunter
+cargo install --path .
+```
+
+#### Option 2: Pre-built Binaries
+```bash
+# Download latest release for your platform
+curl -sSL https://github.com/m4rba4s/Credential-Hunter/releases/latest/download/ech-linux-x64 -o ech
+chmod +x ech
+sudo mv ech /usr/local/bin/
+```
+
+#### Option 3: Docker
+```bash
+# Run in container
+docker run --rm -v $(pwd):/workspace enterprisesecurity/ech:latest scan --target /workspace
+```
+
+### Basic Usage
+
+#### File System Scanning
+```bash
+# Scan current directory
+ech scan --target .
+
+# Scan with specific output format
+ech scan --target /home/user --format json --output results.json
+
+# Deep scan with all detection methods
+ech scan --target /opt/app --deep --include-archives
+```
+
+#### Memory Analysis
+```bash
+# Scan running processes
+sudo ech memory scan --all-processes
+
+# Target specific process
+sudo ech memory scan --pid 1234 --format table
+
+# Memory dump analysis
+ech dump analyze --file memory.dmp --patterns all
+```
+
+#### Cloud & Container Security
+```bash
+# IMDS token hunting
+ech cloud imds --provider aws --monitor --real-time
+
+# Container credential extraction
+ech container scan --runtime docker --all-containers
+
+# Kubernetes secrets analysis
+ech k8s scan --namespace default --include-secrets
+```
+
+#### WebAuthn & Modern Auth
+```bash
+# Browser credential extraction
+ech webauthn extract --browsers all --format csv
+
+# Hardware token detection
+ech webauthn scan --hardware-tokens --yubikey
+
+# Windows Hello analysis
+ech webauthn scan --windows-hello --tpm-keys
+```
+
+### SOC Team One-Liners
 
 ```bash
-# Download and verify ECH
-curl -sSL https://releases.ech.security/latest/ech-linux-amd64 -o ech
-echo "HASH" | sha256sum -c
-chmod +x ech
+# Quick triage scan
+ech scan --preset triage --target /tmp --format json | jq '.high_risk[]'
 
-# Basic credential scan with new capabilities
-./ech scan --target /home/user --stealth --webauthn --imds
+# Continuous monitoring
+ech daemon --syslog --monitor-dirs "/opt,/home" --alert-webhook https://soc.company.com/alerts
 
-# Enterprise deployment with advanced features
-./ech deploy --config enterprise.yaml --siem-endpoint https://splunk.company.com \
-    --enable-webauthn --enable-imds --enable-vbs-bypass
+# Incident response
+ech scan --preset incident --target /var/log --include-deleted --format sarif
 
-# Container environment scan with passkeys
-./ech container-scan --runtime docker --all-containers --webauthn-hunting
-
-# Memory analysis with VBS bypass
-sudo ./ech memory-scan --pid-range 1000-2000 --vbs-bypass --output json
-
-# Advanced threat hunting mode
-sudo ./ech hunt --webauthn --imds --vbs-bypass --stealth-mode advanced \
-    --output /tmp/hunt-results.json
+# Compliance audit
+ech audit --framework pci-dss --target /opt/payment-app --report-format pdf
 ```
+
+### Advanced Usage
+
+#### Custom Detection Rules
+```bash
+# Load custom YARA rules
+ech scan --yara-rules ~/.config/ech/custom.yar --target /opt/app
+
+# Pattern-based detection
+ech scan --custom-patterns "API_KEY_[A-Z0-9]{32}" --target .
+
+# ML-powered detection
+ech scan --enable-ml --confidence-threshold 0.8 --target /data
+```
+
+#### Stealth & Evasion Testing
+```bash
+# Test detection evasion
+ech stealth test --target-edr crowdstrike --simulation-mode
+
+# Advanced stealth scan
+ech scan --stealth-mode maximum --anti-edr --target /sensitive
+
+# Red team mode
+ech scan --red-team --bypass-protection --silent --target /domain-controller
+```
+
+### Configuration
+
+#### Basic Config (`~/.config/ech/config.yaml`)
+```yaml
+# Quick start configuration
+engine:
+  max_memory: "2GB"
+  workers: 8
+
+detection:
+  enable_patterns: true
+  enable_entropy: true
+  min_confidence: "medium"
+
+output:
+  format: "json"
+  mask_secrets: true
+
+stealth:
+  level: "low"
+  enable_edr_evasion: false
+```
+
+#### Enterprise Config
+```yaml
+# Enterprise deployment
+siem:
+  endpoint: "https://splunk.company.com:8088"
+  token: "${SPLUNK_HEC_TOKEN}"
+  
+alerts:
+  webhook: "https://security.company.com/alerts"
+  severity_threshold: "high"
+
+compliance:
+  frameworks: ["pci-dss", "sox", "gdpr"]
+  audit_trail: true
+```
+
+### Performance Tips
+
+- **Multi-threading**: Use `--workers N` to match your CPU cores
+- **Memory**: Set `--max-memory 4GB` for large scans  
+- **SIMD**: ECH auto-detects AVX2/NEON for 3x+ speed boost
+- **Exclusions**: Use `--exclude "*.log,tmp/*"` to skip noise
+- **Batch mode**: Process multiple targets with `--batch targets.txt`
 
 ## 📈 USE CASES
 

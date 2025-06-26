@@ -210,6 +210,51 @@ pub enum ConfidenceLevel {
     Critical, // 96-100%
 }
 
+impl ConfidenceLevel {
+    /// Convert confidence level to f64 value
+    pub fn to_f64(&self) -> f64 {
+        match self {
+            ConfidenceLevel::Low => 0.25,
+            ConfidenceLevel::Medium => 0.6,
+            ConfidenceLevel::High => 0.85,
+            ConfidenceLevel::Critical => 0.95,
+        }
+    }
+    
+    /// Create confidence level from f64 value
+    pub fn from_f64(value: f64) -> Self {
+        match value {
+            v if v >= 0.9 => ConfidenceLevel::Critical,
+            v if v >= 0.75 => ConfidenceLevel::High,
+            v if v >= 0.4 => ConfidenceLevel::Medium,
+            _ => ConfidenceLevel::Low,
+        }
+    }
+}
+
+impl std::fmt::Display for ConfidenceLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfidenceLevel::Low => write!(f, "Low (25%)"),
+            ConfidenceLevel::Medium => write!(f, "Medium (60%)"),
+            ConfidenceLevel::High => write!(f, "High (85%)"),
+            ConfidenceLevel::Critical => write!(f, "Critical (95%)"),
+        }
+    }
+}
+
+impl PartialEq<f64> for ConfidenceLevel {
+    fn eq(&self, other: &f64) -> bool {
+        (self.to_f64() - other).abs() < f64::EPSILON
+    }
+}
+
+impl PartialOrd<f64> for ConfidenceLevel {
+    fn partial_cmp(&self, other: &f64) -> Option<std::cmp::Ordering> {
+        self.to_f64().partial_cmp(other)
+    }
+}
+
 /// Risk levels for security assessment
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum RiskLevel {

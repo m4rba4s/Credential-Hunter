@@ -68,8 +68,11 @@ allow = [
 ]
 
 deny = [
-    # Security-sensitive crates to avoid
-    { name = "openssl", reason = "Use rustls instead" },
+    # Security-sensitive: deny known vulnerable crates
+    { name = "openssl", version = "<0.10.55", reason = "Security vulnerabilities in older versions" },
+    { name = "reqwest", version = "<0.11.18", reason = "Security vulnerabilities" },
+    { name = "tokio", version = "<1.28.0", reason = "Security vulnerabilities" },
+    { name = "hyper", version = "<0.14.27", reason = "Security vulnerabilities" },
 ]
 
 skip = [

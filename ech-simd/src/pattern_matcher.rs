@@ -1,16 +1,14 @@
-use crate::{PatternMatch, simd_utils::*};
+use crate::PatternMatch;
 use anyhow::Result;
-use wide::*;
-use aligned_vec::AVec;
 
 pub struct PatternMatcher {
-    chunk_size: usize,
+    _chunk_size: usize,
 }
 
 impl PatternMatcher {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            chunk_size: 64,
+            _chunk_size: 64,
         })
     }
     

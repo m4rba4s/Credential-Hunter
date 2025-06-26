@@ -290,6 +290,9 @@ fn init_logging(verbose: bool) -> Result<()> {
         .with_line_number(false)
         .init();
     
+    // Mark tracing as initialized to prevent duplicate initialization
+    std::env::set_var("ECH_TRACING_INITIALIZED", "1");
+    
     Ok(())
 }
 

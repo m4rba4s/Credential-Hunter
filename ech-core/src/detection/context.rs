@@ -746,7 +746,7 @@ impl ContextAnalyzer {
         }
         
         // Clamp score to valid range
-        score = score.max(0.0).min(1.0);
+        score = score.max(0.0_f64).min(1.0_f64);
         
         (score, applied_rules, adjustments)
     }
