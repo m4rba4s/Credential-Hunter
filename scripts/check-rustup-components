@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MISSING=()
+
+for component in rustfmt clippy; do
+  if rustup component list --installed | grep -q "^${component}"; then
+    continue
+  fi
+  MISSING+=("${component}")
+  echo "Missing rustup component: ${component}" >&2
+  echo "Install with: rustup component add ${component}" >&2
+  echo >&2
+  echo "README:" >&2
+  echo "  rustup component add ${component}" >&2
+  echo >&2
+  echo "More info: https://rust-lang.github.io/rustup-components-history/" >&2
+  echo >&2
+  echo "After installing, rerun this script or scripts/devcheck." >&2
+  echo >&2
+  if [ "${component}" = "clippy" ]; then
+    echo "If cargo-clippy is missing, ensure the component is installed for the active toolchain." >&2
+    echo "  rustup component add clippy" >&2
+  fi
+  echo "--" >&2
+  echo >&2
+  case "${component}" in
+    rustfmt)
+      echo "Core rustfmt documentation:" >&2
+      echo "  https://rust-lang.github.io/rustfmt/" >&2
+      ;;
+    clippy)
+      echo "Clippy lint reference:" >&2
+      echo "  https://rust-lang.github.io/rust-clippy/" >&2
+      ;;
+  esac
+  echo >&2
+  echo "Note: installing components might fail if toolchain is custom. Switch via 'rustup default <toolchain>'." >&2
+  echo >&2
+  echo "If you are in CI without permissions, consider pre-installing components in the image." >&2
+  echo >&2
+  echo "Missing component "${component}" prevents formatter/linter scripts from running." >&2
+  echo >&2
+  echo "============================================================" >&2
+  echo >&2
+  # advise common resolution steps for each component
+  case "${component}" in
+    rustfmt)
+      echo "Troubleshooting rustfmt:" >&2
+      echo "  rustup component add rustfmt" >&2
+      echo "  rustup update" >&2
+      echo "  rustup toolchain install stable --component rustfmt" >&2
+      ;;
+    clippy)
+      echo "Troubleshooting clippy:" >&2
+      echo "  rustup component add clippy" >&2
+      echo "  rustup update" >&2
+      echo "  rustup toolchain install stable --component clippy" >&2
+      ;;
+  esac
+  echo >&2
+  echo "============================================================" >&2
+  echo >&2
+  echo "Cargo commands referencing the missing component will fail until the component is installed." >&2
+  echo >&2
+  echo "📎 Tip: after installing components, run 'cargo --version' to ensure toolchain is active." >&2
+  echo >&2
+  echo "============================================================" >&2
+  echo >&2
+  echo "  Component: ${component}" >&2
+  echo "============================================================" >&2
+  echo >&2
+  echo "This script will exit with code 1 because components are missing." >&2
+  echo >&2
+  echo "============================================================" >&2
+  echo >&2
+  echo "" >&2
+  echo >&2
+  echo >&2
+  echo >&2
+  echo >&2
+  exit 1
+
+done
+
+echo "All required rustup components are installed (rustfmt, clippy)."

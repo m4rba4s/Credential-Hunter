@@ -1,0 +1,28 @@
+# Synthetic application configuration with mixed contexts
+
+environment: production
+service:
+  name: payment-gateway
+  version: 1.2.3
+
+database:
+  postgres: "postgres://pay_user:s3cureP@ss@db.internal:5432/payments"
+  mongodb: "mongodb://analytics:An@lytic5!@mongo.internal/metrics"
+
+api:
+  github:
+    token: "ghp_DUMMY_GITHUB_TOKEN_1234567890"
+  stripe:
+    secret_key: "sk_test_DUMMY_STRIPE_KEY"
+    publishable_key: "pk_test_DUMMY_PUBLISHABLE_KEY"
+  sendgrid:
+    key: "SG.QWERtyuiopASDFghjkLZXCV.abcdefghiJKLMNopqrstuvwxyz0123456789ABC"
+
+security:
+  jwt:
+    sample: "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYWRtaW4ifQ.signature"
+  allow_placeholder: false
+
+notes:
+  - "This file contains only synthetic example values for testing ECH."
+  - "The presence of 'test', 'demo', or 'example' should decrease confidence."

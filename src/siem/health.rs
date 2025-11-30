@@ -1,9 +1,8 @@
+use super::HealthConfig;
 /**
  * ECH SIEM Health Module
  */
-
 use anyhow::Result;
-use super::HealthConfig;
 
 pub struct HealthMonitor;
 
@@ -20,11 +19,11 @@ impl HealthMonitor {
     pub async fn new(_config: &HealthConfig) -> Result<Self> {
         Ok(Self)
     }
-    
+
     pub async fn perform_health_check(&self) -> Result<()> {
         Ok(())
     }
-    
+
     pub async fn get_status(&self) -> HealthStatus {
         HealthStatus::Healthy
     }

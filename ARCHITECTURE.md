@@ -90,6 +90,8 @@ memory/
 - **Stack Scanning**: Analyze call stacks for sensitive data
 - **Binary Parsing**: Extract strings from executable memory
 - **Volatile Data**: Capture credentials in transit
+- **Interception Hooks**: `MemoryInterceptHook` wrappers around process reads for auditing/testing before/after raw access
+  - Enable a runtime logging hook with `ECH_LOG_MEMORY_READS=1` to trace before/after read boundaries without changing scanner code.
 
 ### Filesystem Hunter (`src/filesystem/`)
 ```
@@ -112,6 +114,14 @@ filesystem/
 - **Deep Parsing**: Extract credentials from nested data structures
 - **Archive Support**: Scan inside ZIP, TAR, JAR files
 - **Real-time Monitoring**: inotify/ReadDirectoryChanges integration
+- **Nested Archives**: Detection results bubble up from multi-layer archives (see nested archive tests)
+
+### Synthetic Fixtures (for tests)
+- Located under `testdata/synthetic/**` covering env/logs/DB dumps/kube/docker/tls/archives.
+- TLS bundle: `testdata/synthetic/tls/client_auth.p12` + `tls_manifest.yaml`.
+- Nested archives: `testdata/synthetic/archives/{creds_bundle.zip,nested_creds.zip}`.
+- Container secrets: kube secrets, docker config, docker-compose with mixed cloud tokens.
+- Tests: `tests/fixture_secrets.rs`, `tests/engine_archive_scan.rs`, `tests/nested_archive_scan.rs`.
 
 ### Container Scanner (`src/container/`)
 ```
@@ -200,6 +210,14 @@ Input Sources → Detection Engine → Analysis → Remediation → SIEM Export
 │ • Network   │ │ • YARA      │ │ • Scoring│ │ • Wipe  │ │ • Webhooks  │
 └─────────────┘ └─────────────┘ └──────────┘ └─────────┘ └─────────────┘
 ```
+
+## 🔎 Observability & Telemetry
+
+- CLI and library bootstrap `core::logging::FancyLogFormatter` for colorized yet structured logging (see `docs/LOGGING_AND_OBSERVABILITY.md`).
+- Startup banner confirms configuration unless `ECH_SILENT_BANNER=1` or `--quiet` is supplied.
+- `AntiDetection::check_environment` surfaces `AntiDetectionReport` objects; `MemoryScanner` folds trigger counts into `ScanSummary::anti_detection_triggers` and global `MemoryStats`.
+- Anti-detection hooks are modular (`AntiDetectionHook` trait) so platforms can extend guardrails without updating the scanner; Linux ships with tracer, `LD_PRELOAD`, and cgroup fingerprints out of the box.
+- Future telemetry work will feed `core::metrics` and SIEM exporters for dashboards and automated response.
 
 ### Security Boundaries
 ```

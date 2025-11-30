@@ -1,13 +1,13 @@
 /**
  * Enterprise Credential Hunter (ECH) - Main Entry Point
- * 
+ *
  * Ultra enterprise-grade credential hunting system designed for DFIR and Red Team operations.
  * This is the primary CLI interface that orchestrates all credential hunting operations
  * with military-grade security, stealth capabilities, and enterprise integration.
- * 
+ *
  * SECURITY NOTICE: This tool is designed for authorized security testing only.
  * Unauthorized use against systems you do not own is illegal and unethical.
- * 
+ *
  * Architecture:
  * - Modular design with plugin architecture for extensibility
  * - Cross-platform support (Linux, Windows, macOS)
@@ -15,31 +15,32 @@
  * - Atomic operations for race-condition resistance
  * - Self-destruct capabilities for operational security
  */
-
 use anyhow::{Context, Result};
-use clap::{Arg, ArgAction, Command, ValueEnum};
+use clap::value_parser;
+use clap::{Arg, ArgAction, Command as ClapCommand, ValueEnum};
 use std::sync::Arc;
 use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+mod container;
 mod core;
 mod detection;
-mod memory;
 mod filesystem;
-mod container;
-mod stealth;
+mod memory;
 mod remediation;
-mod siem;
+mod stealth;
+// SIEM is feature-gated in the library; avoid compiling heavy bin module here.
 
 use crate::core::{
     config::{EchConfig, LogLevel, OutputFormat},
     engine::EchEngine,
+    logging::FancyLogFormatter,
     security::SecurityContext,
 };
 
 /// ECH CLI Commands
 #[derive(Debug, Clone, ValueEnum)]
-enum Command {
+enum CliCommand {
     /// Scan filesystem for credentials
     FileScan,
     /// Scan process memory for credentials
@@ -86,8 +87,8 @@ enum RemediationAction {
     Rotate,
 }
 
-fn build_cli() -> Command {
-    Command::new("ech")
+fn build_cli() -> ClapCommand {
+    ClapCommand::new("ech")
         .version(env!("CARGO_PKG_VERSION"))
         .author("DFIR Security Team <security@ech-security.com>")
         .about("Enterprise Credential Hunter - Ultra-grade DFIR credential hunting system")
@@ -100,7 +101,7 @@ fn build_cli() -> Command {
         .arg(
             Arg::new("command")
                 .help("Operation to perform")
-                .value_enum::<Command>()
+                .value_parser(value_parser!(CliCommand))
                 .required(true)
                 .index(1)
         )
@@ -108,7 +109,10 @@ fn build_cli() -> Command {
             Arg::new("target")
                 .long("target")
                 .short('t')
-                .help("Target path, PID, or container to scan")
+                .help(
+                    "Target path/PID/container. Use filesystem://root for full sweeps, \
+                     criteria:key=value for process filters, or region:pid=42,start=0x0,size=4096"
+                )
                 .value_name("PATH|PID|CONTAINER")
                 .action(ArgAction::Append)
         )
@@ -125,7 +129,7 @@ fn build_cli() -> Command {
                 .long("stealth")
                 .short('s')
                 .help("Stealth operation mode")
-                .value_enum::<StealthMode>()
+                .value_parser(value_parser!(StealthMode))
                 .default_value("none")
         )
         .arg(
@@ -133,7 +137,7 @@ fn build_cli() -> Command {
                 .long("remediation")
                 .short('r')
                 .help("Remediation action for found credentials")
-                .value_enum::<RemediationAction>()
+                .value_parser(value_parser!(RemediationAction))
                 .default_value("report")
         )
         .arg(
@@ -148,7 +152,7 @@ fn build_cli() -> Command {
                 .long("format")
                 .short('f')
                 .help("Output format")
-                .value_enum::<OutputFormat>()
+                .value_parser(value_parser!(OutputFormat))
                 .default_value("json")
         )
         .arg(
@@ -251,6 +255,12 @@ fn build_cli() -> Command {
                 .help("Run with elevated privileges (required for memory scanning)")
                 .action(ArgAction::SetTrue)
         )
+        .arg(
+            Arg::new("log-memory-reads")
+                .long("log-memory-reads")
+                .help("Enable verbose logging for each memory read operation (debug)")
+                .action(ArgAction::SetTrue)
+        )
 }
 
 fn setup_logging(log_level: LogLevel, quiet: bool) -> Result<()> {
@@ -274,15 +284,18 @@ fn setup_logging(log_level: LogLevel, quiet: bool) -> Result<()> {
         )
         .with(
             tracing_subscriber::fmt::layer()
-                .with_target(true)
-                .with_thread_ids(true)
-                .with_thread_names(true)
-                .with_file(true)
-                .with_line_number(true)
-                .json()  // Structured logging for enterprise SIEM integration
+                .with_ansi(true)
+                .with_target(false)
+                .with_thread_ids(false)
+                .with_thread_names(false)
+                .event_format(FancyLogFormatter::default()),
         );
 
     subscriber.init();
+
+    if !quiet {
+        crate::core::logging::emit_banner();
+    }
     Ok(())
 }
 
@@ -290,7 +303,7 @@ async fn run_ech() -> Result<()> {
     let matches = build_cli().get_matches();
 
     // Parse command line arguments
-    let command = matches.get_one::<Command>("command").unwrap();
+    let command = matches.get_one::<CliCommand>("command").unwrap();
     let config_path = matches.get_one::<String>("config").unwrap();
     let stealth_mode = matches.get_one::<StealthMode>("stealth").unwrap();
     let remediation_action = matches.get_one::<RemediationAction>("remediation").unwrap();
@@ -308,19 +321,24 @@ async fn run_ech() -> Result<()> {
     };
 
     // Initialize logging system
-    setup_logging(log_level, quiet)
-        .context("Failed to initialize logging system")?;
+    setup_logging(log_level, quiet).context("Failed to initialize logging system")?;
 
-    info!("🔥 Enterprise Credential Hunter (ECH) v{} starting", env!("CARGO_PKG_VERSION"));
-    info!("Command: {:?}, Stealth: {:?}, Remediation: {:?}", command, stealth_mode, remediation_action);
+    info!(
+        "🔥 Enterprise Credential Hunter (ECH) v{} starting",
+        env!("CARGO_PKG_VERSION")
+    );
+    info!(
+        "Command: {:?}, Stealth: {:?}, Remediation: {:?}",
+        command, stealth_mode, remediation_action
+    );
 
     // Load configuration
-    let mut config = EchConfig::load_from_file(config_path)
-        .context("Failed to load configuration")?;
+    let mut config =
+        EchConfig::load_from_file(config_path).context("Failed to load configuration")?;
 
     // Override config with CLI arguments
     if let Some(output_file) = matches.get_one::<String>("output") {
-        config.output.file_path = Some(output_file.clone());
+        config.output.file_path = Some(output_file.clone().into());
     }
 
     if let Some(format) = matches.get_one::<OutputFormat>("format") {
@@ -342,6 +360,50 @@ async fn run_ech() -> Result<()> {
     config.operation.dry_run = dry_run;
     config.operation.self_destruct = self_destruct;
     config.security.privileged_mode = privileged;
+    if matches.get_flag("log-memory-reads") {
+        config.memory.log_memory_reads = true;
+    }
+
+    if matches!(command, CliCommand::Monitor) {
+        config.filesystem.real_time_monitoring = true;
+    }
+
+    // Map CLI parallelism and timeout into engine config
+    if let Some(parallel_str) = matches.get_one::<String>("parallel") {
+        if let Ok(p) = parallel_str.parse::<usize>() {
+            // 0 means auto-detect; otherwise, set explicitly
+            config.engine.worker_threads = p;
+        }
+    }
+    if let Some(timeout_str) = matches.get_one::<String>("timeout") {
+        if let Ok(t) = timeout_str.parse::<u64>() {
+            config.engine.timeout_seconds = t;
+        }
+    }
+    if let Some(mem_str) = matches.get_one::<String>("memory-limit") {
+        if let Ok(m) = mem_str.parse::<usize>() {
+            config.engine.memory_limit_mb = m;
+        }
+    }
+    if matches.get_flag("no-network") {
+        config.operation.network_enabled = false;
+    }
+
+    // Map CLI remediation and stealth into config
+    // Note: CLI enums are local; map to core config enums.
+    config.remediation.default_action = match remediation_action {
+        RemediationAction::Report => crate::core::config::RemediationAction::Report,
+        RemediationAction::Mask => crate::core::config::RemediationAction::Mask,
+        RemediationAction::Quarantine => crate::core::config::RemediationAction::Quarantine,
+        RemediationAction::Wipe => crate::core::config::RemediationAction::Wipe,
+        RemediationAction::Rotate => crate::core::config::RemediationAction::Rotate,
+    };
+    config.stealth.mode = match stealth_mode {
+        StealthMode::None => crate::core::config::StealthMode::None,
+        StealthMode::Low => crate::core::config::StealthMode::Low,
+        StealthMode::High => crate::core::config::StealthMode::High,
+        StealthMode::Maximum => crate::core::config::StealthMode::Maximum,
+    };
 
     // Parse targets
     let targets: Vec<String> = matches
@@ -351,56 +413,70 @@ async fn run_ech() -> Result<()> {
 
     // Security context validation
     let security_context = SecurityContext::new(&config)
+        .await
         .context("Failed to initialize security context")?;
 
-    if !security_context.validate_privileges() {
+    if !security_context.validate_privileges().await {
         warn!("Running without sufficient privileges. Some operations may fail.");
-        if matches!(command, Command::MemoryScan) && !privileged {
+        if matches!(command, CliCommand::MemoryScan) && !privileged {
             error!("Memory scanning requires elevated privileges. Use --privileged flag.");
-            return Err(anyhow::anyhow!("Insufficient privileges for memory scanning"));
+            return Err(anyhow::anyhow!(
+                "Insufficient privileges for memory scanning"
+            ));
         }
     }
+
+    // Initialize shared subsystems so standalone CLI builds exercise the same paths as the library.
+    crate::memory::initialize_memory_subsystem()
+        .await
+        .context("Failed to initialize memory subsystem")?;
+    crate::filesystem::initialize_filesystem_subsystem()
+        .await
+        .context("Failed to initialize filesystem subsystem")?;
+    crate::stealth::initialize_stealth_subsystem()
+        .await
+        .context("Failed to initialize stealth subsystem")?;
 
     // Initialize ECH engine
     let engine = Arc::new(
         EchEngine::new(config.clone())
             .await
-            .context("Failed to initialize ECH engine")?
+            .context("Failed to initialize ECH engine")?,
     );
 
     info!("🚀 ECH engine initialized successfully");
 
-    // Execute command
-    let result = match command {
-        Command::FileScan => {
+    // Execute command (map results to unit for simplicity)
+    let result: Result<(), anyhow::Error> = match command {
+        CliCommand::FileScan => {
             info!("📁 Starting filesystem credential scan");
-            engine.scan_filesystem(targets).await
+            engine.scan_filesystem(targets).await.map(|_| ())
         }
-        Command::MemoryScan => {
+        CliCommand::MemoryScan => {
             info!("🧠 Starting memory credential scan");
-            engine.scan_memory(targets).await
+            engine.scan_memory(targets).await.map(|_| ())
         }
-        Command::ContainerScan => {
+        CliCommand::ContainerScan => {
             info!("🐳 Starting container credential scan");
-            engine.scan_containers(targets).await
+            engine.scan_containers(targets).await.map(|_| ())
         }
-        Command::Monitor => {
+        CliCommand::Monitor => {
             info!("👁️ Starting continuous monitoring mode");
-            engine.start_monitoring().await
+            engine.start_monitoring(targets).await
         }
-        Command::Report => {
+        CliCommand::Report => {
             info!("📊 Generating compliance report");
-            engine.generate_report().await
+            engine.generate_report().await.map(|_| ())
         }
-        Command::TestSiem => {
+        CliCommand::TestSiem => {
             info!("🔗 Testing SIEM integration");
             engine.test_siem_integration().await
         }
-        Command::SelfDestruct => {
+        CliCommand::SelfDestruct => {
             warn!("💥 Initiating self-destruct sequence");
             engine.self_destruct().await
         }
-        Command::Capabilities => {
+        CliCommand::Capabilities => {
             info!("🔍 Checking system capabilities");
             engine.show_capabilities().await
         }
@@ -454,21 +530,22 @@ mod tests {
     #[test]
     fn test_cli_parsing() {
         let app = build_cli();
-        
+
         // Test basic command parsing
         let matches = app.try_get_matches_from(&["ech", "file-scan", "--target", "/tmp"]);
         assert!(matches.is_ok());
-        
+
         // Test stealth mode parsing
-        let matches = app.try_get_matches_from(&["ech", "memory-scan", "--stealth", "high"]);
+        let app2 = build_cli();
+        let matches = app2.try_get_matches_from(&["ech", "memory-scan", "--stealth", "high"]);
         assert!(matches.is_ok());
     }
 
-    #[test]
-    fn test_security_validation() {
+    #[tokio::test]
+    async fn test_security_validation() {
         // Test that security validations work correctly
         let config = EchConfig::default();
-        let security_context = SecurityContext::new(&config);
+        let security_context = SecurityContext::new(&config).await;
         assert!(security_context.is_ok());
     }
 }

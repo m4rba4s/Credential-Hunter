@@ -1,0 +1,17 @@
+## Synthetic application config for test scanning
+database:
+  url: "postgres://user:pass@localhost:5432/appdb"
+  password: "SuperSecretPass123!"
+
+redis:
+  url: "redis://localhost:6379"
+  password: "redis_test_password_456"
+
+github:
+  token: "ghp_DUMMY_GITHUB_TOKEN_1234567890"
+
+stripe:
+  secret_key: "sk_test_DUMMY_STRIPE_KEY"
+
+jwt:
+  token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE2MDAwMDAwMDAsInVzZXIiOiJ0ZXN0In0.abcDEFghiJKLmnoPQRstuVWXyz-0123456789abcd"

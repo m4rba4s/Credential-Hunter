@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "cargo not found. Please install Rust toolchain." >&2
+  exit 1
+fi
+
+if ! command -v cargo-clippy >/dev/null 2>&1; then
+  echo "cargo-clippy not found. Install with: rustup component add clippy" >&2
+  exit 1
+fi
+
+echo "Running cargo clippy..."
+if ! cargo clippy --all-targets --no-deps; then
+  echo "cargo clippy reported issues. Fix the warnings above or ensure clippy is up to date." >&2
+  exit 1
+fi
+echo "Lint checks passed."

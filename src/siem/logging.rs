@@ -1,11 +1,10 @@
 /**
  * ECH SIEM Logging Module
  */
-
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 pub struct SecureLogger;
 
@@ -32,14 +31,16 @@ pub struct LogEntry {
 pub struct LogConfig;
 
 impl Default for LogConfig {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl SecureLogger {
     pub async fn new(_config: &LogConfig) -> Result<Self> {
         Ok(Self)
     }
-    
+
     pub async fn log(&self, _entry: LogEntry) -> Result<()> {
         Ok(())
     }

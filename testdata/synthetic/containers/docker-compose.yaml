@@ -1,0 +1,13 @@
+version: "3.9"
+services:
+  api:
+    image: example/api:latest
+    environment:
+      - STRIPE_SECRET=sk_test_51ExampleStripeSecretKey_abcdefghijk
+      - TWILIO_API_KEY=1234567890abcdef1234567890abcdef
+      - SENDGRID_TOKEN=SG.fakeSendGridKey-abcdef0123456789abcdef
+      - REDIS_URL=redis://:SuperRedisPass@redis:6379/0
+      - AWS_ACCESS_KEY_ID=AKIAFAKEACCESSKEY1234
+      - AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+    volumes:
+      - ./config:/app/config

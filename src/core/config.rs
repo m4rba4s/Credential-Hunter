@@ -1,378 +1,407 @@
 /**
  * ECH Configuration Management
- * 
+ *
  * Enterprise-grade configuration system with hierarchical loading, environment variable
  * support, and secure secrets management. Designed for complex enterprise deployments
  * with multiple environments and security requirements.
- * 
+ *
  * Configuration Precedence (highest to lowest):
  * 1. Command line arguments
  * 2. Environment variables (ECH_*)
  * 3. Configuration file
  * 4. Secure defaults
  */
-
 use anyhow::{Context, Result};
+use clap::ValueEnum;
+use secrecy::Secret;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
-use clap::ValueEnum;
-use secrecy::{ExposeSecret, Secret};
-use zeroize::Zeroize;
+
+fn default_runtime_root() -> PathBuf {
+    std::env::var("ECH_STATE_DIR")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("ech"))
+}
+
+fn default_runtime_path(subdir: &str) -> PathBuf {
+    let mut root = default_runtime_root();
+    root.push(subdir);
+    root
+}
 
 /// Primary ECH configuration structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EchConfig {
     /// Core engine configuration
     pub engine: EngineConfig,
-    
+
     /// Detection engine settings
     pub detection: DetectionConfig,
-    
+
     /// Memory scanning configuration
     pub memory: MemoryConfig,
-    
+
     /// Filesystem scanning configuration
     pub filesystem: FilesystemConfig,
-    
+
     /// Container scanning configuration
     pub container: ContainerConfig,
-    
+
     /// Stealth operation settings
     pub stealth: StealthConfig,
-    
+
     /// Remediation configuration
     pub remediation: RemediationConfig,
-    
+
     /// SIEM integration settings
     pub siem: SiemConfig,
-    
+
     /// Output configuration
     pub output: OutputConfig,
-    
+
     /// Security settings
     pub security: SecurityConfig,
-    
+
     /// Performance tuning
     pub performance: PerformanceConfig,
-    
+
     /// Audit and compliance
     pub audit: AuditConfig,
-    
+
     /// Operation mode settings
     pub operation: OperationConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Engine-level tuning parameters.
 pub struct EngineConfig {
     /// Worker thread pool size (0 = auto-detect)
     pub worker_threads: usize,
-    
+
     /// Maximum memory usage in MB
     pub memory_limit_mb: usize,
-    
+
     /// Operation timeout in seconds
     pub timeout_seconds: u64,
-    
+
     /// Plugin directories
     pub plugin_directories: Vec<PathBuf>,
-    
+
     /// Enable experimental features
     pub experimental_features: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configure detection behaviour and pattern sets.
 pub struct DetectionConfig {
     /// Enable entropy analysis for unknown secrets
     pub entropy_analysis: bool,
-    
+
     /// Minimum entropy threshold for detection
     pub entropy_threshold: f64,
-    
+
     /// Enable ML-based classification
     pub ml_classification: bool,
-    
+
     /// Custom pattern files
     pub custom_patterns: Vec<PathBuf>,
-    
+
     /// YARA rules files
     pub yara_rules: Vec<PathBuf>,
-    
+
     /// Enable context-aware detection
     pub context_analysis: bool,
-    
+
     /// Minimum credential length
     pub min_credential_length: usize,
-    
+
     /// Maximum credential length
     pub max_credential_length: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configure process memory scanning.
 pub struct MemoryConfig {
     /// Enable process memory scanning
     pub process_scanning: bool,
-    
+
     /// Enable heap analysis
     pub heap_analysis: bool,
-    
+
     /// Enable stack scanning
     pub stack_scanning: bool,
-    
+
     /// Maximum memory region size to scan (MB)
     pub max_region_size_mb: usize,
-    
+
     /// Scan executable memory regions
     pub scan_executable_regions: bool,
-    
+
     /// Use process injection for stealth
     pub use_injection: bool,
-    
+
     /// Memory scan batch size
     pub scan_batch_size: usize,
+
+    /// Enable verbose logging of memory read operations
+    #[serde(default)]
+    pub log_memory_reads: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configure filesystem scanning behaviour.
 pub struct FilesystemConfig {
     /// Maximum file size to scan (MB)
     pub max_file_size_mb: usize,
-    
+
     /// File extensions to scan
     pub scan_extensions: Vec<String>,
-    
+
     /// File extensions to exclude
     pub exclude_extensions: Vec<String>,
-    
+
     /// Directories to exclude
     pub exclude_directories: Vec<PathBuf>,
-    
+
     /// Follow symbolic links
     pub follow_symlinks: bool,
-    
+
     /// Scan hidden files and directories
     pub scan_hidden: bool,
-    
+
     /// Enable real-time monitoring
     pub real_time_monitoring: bool,
-    
+
     /// Archive formats to extract and scan
     pub scan_archives: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configure container scanning support.
 pub struct ContainerConfig {
     /// Enable Docker container scanning
     pub docker_enabled: bool,
-    
+
     /// Enable Podman container scanning
     pub podman_enabled: bool,
-    
+
     /// Enable Kubernetes pod scanning
     pub kubernetes_enabled: bool,
-    
+
     /// Scan container images
     pub scan_images: bool,
-    
+
     /// Scan container volumes
     pub scan_volumes: bool,
-    
+
     /// Scan environment variables
     pub scan_environment: bool,
-    
+
     /// Docker socket path
     pub docker_socket: PathBuf,
-    
+
     /// Kubernetes config path
     pub kube_config: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configure stealth/anti-detection defaults.
 pub struct StealthConfig {
     /// Stealth operation mode
     pub mode: StealthMode,
-    
+
     /// Enable EDR evasion techniques
     pub edr_evasion: bool,
-    
+
     /// Enable process hollowing
     pub process_hollowing: bool,
-    
+
     /// Enable API obfuscation
     pub api_obfuscation: bool,
-    
+
     /// Timing randomization (ms)
     pub timing_jitter: u64,
-    
+
     /// Memory footprint minimization
     pub minimize_footprint: bool,
-    
+
     /// Auto-cleanup temporary files
     pub auto_cleanup: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configure remediation workflows and storage.
 pub struct RemediationConfig {
     /// Default remediation action
     pub default_action: RemediationAction,
-    
+
     /// Enable automatic remediation
     pub auto_remediate: bool,
-    
+
     /// Backup before remediation
     pub create_backups: bool,
-    
+
     /// Backup directory
     pub backup_directory: PathBuf,
-    
+
     /// Enable credential rotation
     pub enable_rotation: bool,
-    
+
     /// Quarantine directory
     pub quarantine_directory: PathBuf,
-    
+
     /// Secure wipe passes
     pub wipe_passes: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configure SIEM integrations.
 pub struct SiemConfig {
     /// SIEM endpoint URL
     pub endpoint: Option<String>,
-    
+
     /// Authentication token
     #[serde(skip_serializing)]
     pub auth_token: Option<Secret<String>>,
-    
+
     /// Output format for SIEM
     pub format: SiemFormat,
-    
+
     /// Enable real-time streaming
     pub real_time_streaming: bool,
-    
+
     /// Batch size for bulk uploads
     pub batch_size: usize,
-    
+
     /// Connection timeout (seconds)
     pub timeout_seconds: u64,
-    
+
     /// Enable TLS verification
     pub verify_tls: bool,
-    
+
     /// Custom headers
     pub custom_headers: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configure output formatting and transports.
 pub struct OutputConfig {
     /// Output format
     pub format: OutputFormat,
-    
+
     /// Output file path
     pub file_path: Option<PathBuf>,
-    
+
     /// Enable console output
     pub console_output: bool,
-    
+
     /// Enable colored output
     pub colored_output: bool,
-    
+
     /// Compress output files
     pub compress_output: bool,
-    
+
     /// Include full credential values (dangerous!)
     pub include_full_values: bool,
-    
+
     /// Mask character for credentials
     pub mask_character: char,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configure security posture and safeguards.
 pub struct SecurityConfig {
     /// Enable privileged mode
     pub privileged_mode: bool,
-    
+
     /// Enable memory encryption
     pub memory_encryption: bool,
-    
+
     /// Enable secure buffer clearing
     pub secure_buffer_clearing: bool,
-    
+
     /// Maximum credential cache time (seconds)
     pub credential_cache_ttl: u64,
-    
+
     /// Enable audit logging
     pub audit_logging: bool,
-    
+
     /// Audit log file
     pub audit_log_file: PathBuf,
-    
+
     /// Enable tamper detection
     pub tamper_detection: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configure performance tuning knobs.
 pub struct PerformanceConfig {
     /// Enable SIMD optimizations
     pub simd_optimizations: bool,
-    
+
     /// Enable memory mapping for large files
     pub memory_mapping: bool,
-    
+
     /// I/O buffer size (KB)
     pub io_buffer_size: usize,
-    
+
     /// Parallel scan workers
     pub parallel_workers: usize,
-    
+
     /// Enable caching
     pub enable_caching: bool,
-    
+
     /// Cache size (MB)
     pub cache_size_mb: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configure audit/compliance behaviour.
 pub struct AuditConfig {
     /// Correlation ID for distributed tracing
     pub correlation_id: Option<String>,
-    
+
     /// User context for operations
     pub user_context: Option<String>,
-    
+
     /// Session ID
     pub session_id: Option<String>,
-    
+
     /// Operation source
     pub operation_source: String,
-    
+
     /// Enable chain of custody logging
     pub chain_of_custody: bool,
-    
+
     /// Digital signature for audit logs
     pub sign_audit_logs: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Configure overall operation mode features.
 pub struct OperationConfig {
     /// Dry run mode (no modifications)
     pub dry_run: bool,
-    
+
     /// Enable self-destruct after operation
     pub self_destruct: bool,
-    
+
     /// Verbose output level
     pub verbose_level: u8,
-    
+
     /// Quiet mode
     pub quiet_mode: bool,
-    
+
     /// Enable network operations
     pub network_enabled: bool,
-    
+
     /// Enable file system operations
     pub filesystem_enabled: bool,
-    
+
     /// Enable memory operations
     pub memory_enabled: bool,
 }
@@ -381,10 +410,15 @@ pub struct OperationConfig {
 #[derive(Debug, Clone, ValueEnum, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LogLevel {
+    /// Emit ultra-verbose diagnostic logs.
     Trace,
+    /// Emit verbose developer-focused logs.
     Debug,
+    /// Emit standard informational logs.
     Info,
+    /// Emit warning logs for abnormal conditions.
     Warn,
+    /// Emit error logs for failures.
     Error,
 }
 
@@ -392,11 +426,17 @@ pub enum LogLevel {
 #[derive(Debug, Clone, ValueEnum, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
+    /// Emit structured JSON.
     Json,
+    /// Emit YAML.
     Yaml,
+    /// Emit CSV rows.
     Csv,
+    /// Emit HTML reports.
     Html,
+    /// Emit Markdown summaries.
     Markdown,
+    /// Emit plain text.
     Text,
 }
 
@@ -404,11 +444,17 @@ pub enum OutputFormat {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SiemFormat {
+    /// Generic JSON payloads.
     Json,
+    /// Common Event Format (CEF).
     Cef,
+    /// Log Event Extended Format (LEEF).
     Leef,
+    /// Legacy syslog-compatible output.
     Syslog,
+    /// Splunk HEC payloads.
     Splunk,
+    /// Elastic Common Schema payloads.
     Elastic,
 }
 
@@ -416,9 +462,13 @@ pub enum SiemFormat {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum StealthMode {
+    /// Disable stealth features.
     None,
+    /// Enable lightweight stealth.
     Low,
+    /// Enable aggressive stealth.
     High,
+    /// Enable maximum stealth.
     Maximum,
 }
 
@@ -426,31 +476,16 @@ pub enum StealthMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RemediationAction {
+    /// Only report the finding.
     Report,
+    /// Mask or redact the finding.
     Mask,
+    /// Quarantine the affected resource.
     Quarantine,
+    /// Wipe the affected data.
     Wipe,
+    /// Rotate the affected credential.
     Rotate,
-}
-
-impl Default for EchConfig {
-    fn default() -> Self {
-        Self {
-            engine: EngineConfig::default(),
-            detection: DetectionConfig::default(),
-            memory: MemoryConfig::default(),
-            filesystem: FilesystemConfig::default(),
-            container: ContainerConfig::default(),
-            stealth: StealthConfig::default(),
-            remediation: RemediationConfig::default(),
-            siem: SiemConfig::default(),
-            output: OutputConfig::default(),
-            security: SecurityConfig::default(),
-            performance: PerformanceConfig::default(),
-            audit: AuditConfig::default(),
-            operation: OperationConfig::default(),
-        }
-    }
 }
 
 impl Default for EngineConfig {
@@ -494,6 +529,7 @@ impl Default for MemoryConfig {
             scan_executable_regions: false,
             use_injection: false,
             scan_batch_size: 1024 * 1024, // 1MB
+            log_memory_reads: false,
         }
     }
 }
@@ -503,15 +539,31 @@ impl Default for FilesystemConfig {
         Self {
             max_file_size_mb: 100,
             scan_extensions: vec![
-                "txt".to_string(), "conf".to_string(), "config".to_string(),
-                "yaml".to_string(), "yml".to_string(), "json".to_string(),
-                "xml".to_string(), "env".to_string(), "properties".to_string(),
-                "ini".to_string(), "cfg".to_string(), "toml".to_string(),
+                "txt".to_string(),
+                "conf".to_string(),
+                "config".to_string(),
+                "yaml".to_string(),
+                "yml".to_string(),
+                "json".to_string(),
+                "xml".to_string(),
+                "env".to_string(),
+                "properties".to_string(),
+                "ini".to_string(),
+                "cfg".to_string(),
+                "toml".to_string(),
+                "p12".to_string(),
+                "pfx".to_string(),
             ],
             exclude_extensions: vec![
-                "exe".to_string(), "dll".to_string(), "so".to_string(),
-                "bin".to_string(), "jpg".to_string(), "png".to_string(),
-                "mp4".to_string(), "avi".to_string(), "pdf".to_string(),
+                "exe".to_string(),
+                "dll".to_string(),
+                "so".to_string(),
+                "bin".to_string(),
+                "jpg".to_string(),
+                "png".to_string(),
+                "mp4".to_string(),
+                "avi".to_string(),
+                "pdf".to_string(),
             ],
             exclude_directories: vec![
                 PathBuf::from("/proc"),
@@ -564,9 +616,9 @@ impl Default for RemediationConfig {
             default_action: RemediationAction::Report,
             auto_remediate: false,
             create_backups: true,
-            backup_directory: PathBuf::from("/var/backups/ech"),
+            backup_directory: default_runtime_path("backups"),
             enable_rotation: false,
-            quarantine_directory: PathBuf::from("/var/quarantine/ech"),
+            quarantine_directory: default_runtime_path("quarantine"),
             wipe_passes: 3,
         }
     }
@@ -620,7 +672,7 @@ impl Default for PerformanceConfig {
         Self {
             simd_optimizations: true,
             memory_mapping: true,
-            io_buffer_size: 64, // 64KB
+            io_buffer_size: 64,  // 64KB
             parallel_workers: 0, // Auto-detect
             enable_caching: true,
             cache_size_mb: 100,
@@ -659,12 +711,15 @@ impl EchConfig {
     /// Load configuration from file with environment variable overrides
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
-        
+
         let mut config = if path.exists() {
             let contents = std::fs::read_to_string(path)
                 .with_context(|| format!("Failed to read config file: {}", path.display()))?;
-            
-            if path.extension().map_or(false, |ext| ext == "yaml" || ext == "yml") {
+
+            if path
+                .extension()
+                .is_some_and(|ext| ext == "yaml" || ext == "yml")
+            {
                 serde_yaml::from_str(&contents)
                     .with_context(|| format!("Failed to parse YAML config: {}", path.display()))?
             } else {
@@ -674,100 +729,119 @@ impl EchConfig {
         } else {
             Self::default()
         };
-        
+
         // Override with environment variables
-        config.apply_environment_overrides()
+        config
+            .apply_environment_overrides()
             .context("Failed to apply environment variable overrides")?;
-        
+
         // Validate configuration
-        config.validate()
+        config
+            .validate()
             .context("Configuration validation failed")?;
-        
+
         Ok(config)
     }
-    
+
     /// Apply environment variable overrides
     fn apply_environment_overrides(&mut self) -> Result<()> {
         // Engine configuration
         if let Ok(workers) = std::env::var("ECH_WORKER_THREADS") {
-            self.engine.worker_threads = workers.parse()
+            self.engine.worker_threads = workers
+                .parse()
                 .context("Invalid ECH_WORKER_THREADS value")?;
         }
-        
+
         if let Ok(memory) = std::env::var("ECH_MEMORY_LIMIT_MB") {
-            self.engine.memory_limit_mb = memory.parse()
+            self.engine.memory_limit_mb = memory
+                .parse()
                 .context("Invalid ECH_MEMORY_LIMIT_MB value")?;
         }
-        
+
+        // Memory configuration
+        if let Ok(log_reads) = std::env::var("ECH_LOG_MEMORY_READS") {
+            self.memory.log_memory_reads = matches!(
+                log_reads.to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            );
+        }
+
         // SIEM configuration
         if let Ok(endpoint) = std::env::var("ECH_SIEM_ENDPOINT") {
             self.siem.endpoint = Some(endpoint);
         }
-        
+
         if let Ok(token) = std::env::var("ECH_SIEM_TOKEN") {
             self.siem.auth_token = Some(Secret::new(token));
         }
-        
+
         // Security configuration
         if let Ok(privileged) = std::env::var("ECH_PRIVILEGED_MODE") {
-            self.security.privileged_mode = privileged.parse()
+            self.security.privileged_mode = privileged
+                .parse()
                 .context("Invalid ECH_PRIVILEGED_MODE value")?;
         }
-        
+
         // Audit configuration
         if let Ok(correlation_id) = std::env::var("ECH_CORRELATION_ID") {
             self.audit.correlation_id = Some(correlation_id);
         }
-        
+
         if let Ok(user_context) = std::env::var("ECH_USER_CONTEXT") {
             self.audit.user_context = Some(user_context);
         }
-        
+
         Ok(())
     }
-    
+
     /// Validate configuration for security and consistency
     fn validate(&self) -> Result<()> {
         // Memory limit validation
         if self.engine.memory_limit_mb < 64 {
-            return Err(anyhow::anyhow!("Memory limit too low: minimum 64MB required"));
+            return Err(anyhow::anyhow!(
+                "Memory limit too low: minimum 64MB required"
+            ));
         }
-        
+
         // Thread count validation
         if self.engine.worker_threads > 0 && self.engine.worker_threads > num_cpus::get() * 4 {
             return Err(anyhow::anyhow!("Worker thread count too high"));
         }
-        
+
         // Security validation
         if self.output.include_full_values && !self.operation.dry_run {
             return Err(anyhow::anyhow!(
                 "Including full credential values is only allowed in dry-run mode"
             ));
         }
-        
+
         // SIEM validation
         if self.siem.endpoint.is_some() && self.siem.auth_token.is_none() {
-            return Err(anyhow::anyhow!("SIEM endpoint requires authentication token"));
+            return Err(anyhow::anyhow!(
+                "SIEM endpoint requires authentication token"
+            ));
         }
-        
+
         Ok(())
     }
-    
+
     /// Save configuration to file
+    #[allow(dead_code)]
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let path = path.as_ref();
-        
-        let contents = if path.extension().map_or(false, |ext| ext == "yaml" || ext == "yml") {
-            serde_yaml::to_string(self)
-                .context("Failed to serialize config to YAML")?
+
+        let contents = if path
+            .extension()
+            .is_some_and(|ext| ext == "yaml" || ext == "yml")
+        {
+            serde_yaml::to_string(self).context("Failed to serialize config to YAML")?
         } else {
-            serde_json::to_string_pretty(self)
-                .context("Failed to serialize config to JSON")?
+            serde_json::to_string_pretty(self).context("Failed to serialize config to JSON")?
         };
-        
+
         std::fs::write(path, contents)
             .with_context(|| format!("Failed to write config file: {}", path.display()))?;
-        
+
         Ok(())
     }
 }
@@ -775,7 +849,7 @@ impl EchConfig {
 // Implement zeroization for sensitive data
 impl Drop for SiemConfig {
     fn drop(&mut self) {
-        if let Some(ref mut token) = self.auth_token {
+        if let Some(ref mut _token) = self.auth_token {
             // The Secret type automatically zeroizes on drop
         }
     }
@@ -785,7 +859,7 @@ impl Drop for SiemConfig {
 mod tests {
     use super::*;
     use tempfile::NamedTempFile;
-    
+
     #[test]
     fn test_default_config() {
         let config = EchConfig::default();
@@ -793,38 +867,41 @@ mod tests {
         assert_eq!(config.detection.entropy_threshold, 4.5);
         assert!(!config.security.privileged_mode);
     }
-    
+
     #[test]
     fn test_config_validation() {
         let mut config = EchConfig::default();
         config.engine.memory_limit_mb = 32; // Too low
-        
+
         assert!(config.validate().is_err());
     }
-    
+
     #[test]
     fn test_config_serialization() {
         let config = EchConfig::default();
-        
+
         // Test JSON serialization
         let json = serde_json::to_string(&config).unwrap();
         let _deserialized: EchConfig = serde_json::from_str(&json).unwrap();
-        
+
         // Test YAML serialization
         let yaml = serde_yaml::to_string(&config).unwrap();
         let _deserialized: EchConfig = serde_yaml::from_str(&yaml).unwrap();
     }
-    
+
     #[test]
     fn test_config_file_loading() {
         let config = EchConfig::default();
-        
+
         // Create temporary file
         let temp_file = NamedTempFile::new().unwrap();
         config.save_to_file(temp_file.path()).unwrap();
-        
+
         // Load from file
         let loaded_config = EchConfig::load_from_file(temp_file.path()).unwrap();
-        assert_eq!(config.engine.worker_threads, loaded_config.engine.worker_threads);
+        assert_eq!(
+            config.engine.worker_threads,
+            loaded_config.engine.worker_threads
+        );
     }
 }

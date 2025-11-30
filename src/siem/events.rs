@@ -1,12 +1,12 @@
+use chrono::{DateTime, Utc};
 /**
  * ECH SIEM Events Module
  */
-
+use serde::Serialize;
 use std::collections::HashMap;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SiemEvent {
     pub id: Uuid,
     pub timestamp: DateTime<Utc>,
@@ -23,7 +23,7 @@ pub struct SiemEvent {
     pub metadata: EventMetadata,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum EventType {
     Information,
     LowThreat,
@@ -32,7 +32,7 @@ pub enum EventType {
     CriticalThreat,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum EventSeverity {
     Informational,
     Low,
@@ -41,7 +41,7 @@ pub enum EventSeverity {
     Critical,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct EventMetadata {
     pub session_id: Uuid,
     pub correlation_id: Option<String>,

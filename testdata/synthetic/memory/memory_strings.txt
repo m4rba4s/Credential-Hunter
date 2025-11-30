@@ -1,0 +1,4 @@
+# Extracted strings from memory dump (synthetic)
+SESSION_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2NvdW50IjoiZGV2In0.fake_sig
+BEARER_TOKEN=ghp_fakefinegrained123456789012345678901234567890abcd
+HIGH_ENTROPY=Hh2Qn4R5t7X9ZaBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789abcdefABCDEF

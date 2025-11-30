@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "cargo not found. Please install Rust toolchain." >&2
+  exit 1
+fi
+
+if ! command -v rustfmt >/dev/null 2>&1; then
+  echo "rustfmt not found. Install with: rustup component add rustfmt" >&2
+  exit 1
+fi
+
+echo "Running cargo fmt..."
+if ! cargo fmt --all; then
+  echo "cargo fmt failed. Ensure rustfmt component is installed and up to date." >&2
+  exit 1
+fi
+echo "Done."

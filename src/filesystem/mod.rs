@@ -1,10 +1,16 @@
+/// File content analyzers and entropy helpers.
+pub mod analyzers;
+/// Archive extraction helpers.
+pub mod archives;
+/// File include/exclude filters.
+pub mod filters;
 /**
  * ECH Filesystem Hunter Module - Enterprise File System Credential Scanning
- * 
+ *
  * This module provides comprehensive filesystem scanning capabilities for detecting
  * credentials in files, directories, and file systems. Features atomic operations,
  * performance optimizations, and enterprise-grade security controls.
- * 
+ *
  * Features:
  * - Recursive directory traversal with filtering
  * - Atomic file operations for safe scanning
@@ -16,49 +22,64 @@
  * - Real-time filesystem monitoring
  * - Symbolic link handling and loop detection
  */
-
 pub mod hunter;
-pub mod scanner;
-pub mod filters;
-pub mod analyzers;
-pub mod watchers;
-pub mod archives;
+/// Extended filesystem metadata extraction.
 pub mod metadata;
+/// Streaming file scanner primitives.
+pub mod scanner;
+/// Filesystem watchers for realtime monitoring.
+pub mod watchers;
 
-pub use hunter::{FilesystemHunter, HunterConfig, ScanResult};
-pub use scanner::{FileScanner, FileContent, ScanOptions};
-pub use filters::{FileFilter, FilterCriteria, FilterRule};
-pub use analyzers::{FileAnalyzer, FileAnalysis, ContentAnalysis};
-pub use watchers::{FilesystemWatcher, WatchEvent, WatchConfig};
-pub use archives::{ArchiveScanner, ArchiveType, ArchiveEntry};
-pub use metadata::{MetadataAnalyzer, FileMetadata, ExtendedAttributes};
+// Re-export primary hunter types so downstream modules can use the concise path.
+#[allow(unused_imports)]
+pub use hunter::{ArchiveScanResult, FilesystemHunter, ScanResult, ScanSummary};
 
 use anyhow::Result;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 /// Initialize filesystem scanning subsystem
 pub async fn initialize_filesystem_subsystem() -> Result<()> {
     info!("📁 Initializing Filesystem Scanning Subsystem");
-    
+
     // Check filesystem capabilities
     let capabilities = check_filesystem_capabilities().await?;
-    
+
     if !capabilities.extended_attributes {
         warn!("Extended attributes not supported on this filesystem");
     }
-    
+
     if !capabilities.memory_mapping {
         warn!("Memory mapping not available - using standard I/O");
     }
-    
+
+    if !capabilities.realtime_monitoring {
+        warn!("Realtime filesystem notifications unavailable - falling back to polling");
+    }
+
+    if !capabilities.large_file_support {
+        warn!("Filesystem may truncate files >4GB - consider narrowing targets");
+    }
+
+    if !capabilities.atomic_operations {
+        warn!("Atomic file operations unsupported - remediation will use best-effort locking");
+    }
+
     info!("✅ Filesystem scanning subsystem initialized");
-    info!("   Extended attributes: {}", capabilities.extended_attributes);
+    info!(
+        "   Extended attributes: {}",
+        capabilities.extended_attributes
+    );
     info!("   Memory mapping: {}", capabilities.memory_mapping);
     info!("   Symbolic links: {}", capabilities.symbolic_links);
     info!("   Archive support: {}", capabilities.archive_support);
-    
+    info!(
+        "   Real-time monitoring: {}",
+        capabilities.realtime_monitoring
+    );
+    info!("   Large file support: {}", capabilities.large_file_support);
+    info!("   Atomic operations: {}", capabilities.atomic_operations);
+
     Ok(())
 }
 
@@ -67,80 +88,81 @@ pub async fn initialize_filesystem_subsystem() -> Result<()> {
 pub struct FilesystemCapabilities {
     /// Extended attributes support
     pub extended_attributes: bool,
-    
+
     /// Memory mapping support
     pub memory_mapping: bool,
-    
+
     /// Symbolic link support
     pub symbolic_links: bool,
-    
+
     /// Archive scanning support
     pub archive_support: bool,
-    
+
     /// Real-time monitoring support
     pub realtime_monitoring: bool,
-    
+
     /// Large file support (>4GB)
     pub large_file_support: bool,
-    
+
     /// Atomic operations support
     pub atomic_operations: bool,
 }
 
 /// Filesystem scanning configuration
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct FilesystemConfig {
     /// Maximum file size to scan (bytes)
     pub max_file_size: u64,
-    
+
     /// Maximum directory depth
     pub max_depth: usize,
-    
+
     /// Enable recursive scanning
     pub recursive: bool,
-    
+
     /// Follow symbolic links
     pub follow_symlinks: bool,
-    
+
     /// Scan hidden files
     pub scan_hidden: bool,
-    
+
     /// Scan system files
     pub scan_system: bool,
-    
+
     /// Enable archive scanning
     pub scan_archives: bool,
-    
+
     /// Enable binary file scanning
     pub scan_binary: bool,
-    
+
     /// Use memory mapping for large files
     pub use_memory_mapping: bool,
-    
+
     /// Number of worker threads
     pub worker_threads: usize,
-    
+
     /// Buffer size for file I/O
     pub buffer_size: usize,
-    
+
     /// Enable atomic operations
     pub atomic_operations: bool,
-    
+
     /// Scan timeout per file (seconds)
     pub file_timeout_sec: u64,
-    
+
     /// Enable real-time monitoring
     pub realtime_monitoring: bool,
-    
+
     /// Excluded file patterns
     pub exclude_patterns: Vec<String>,
-    
+
     /// Included file patterns
     pub include_patterns: Vec<String>,
-    
+
     /// Excluded directories
     pub exclude_directories: Vec<String>,
-    
+
     /// Maximum memory usage (MB)
     pub max_memory_mb: u64,
 }
@@ -148,7 +170,7 @@ pub struct FilesystemConfig {
 impl Default for FilesystemConfig {
     fn default() -> Self {
         Self {
-            max_file_size: 100 * 1024 * 1024,  // 100MB
+            max_file_size: 100 * 1024 * 1024, // 100MB
             max_depth: 50,
             recursive: true,
             follow_symlinks: false,
@@ -158,7 +180,7 @@ impl Default for FilesystemConfig {
             scan_binary: false,
             use_memory_mapping: true,
             worker_threads: num_cpus::get(),
-            buffer_size: 64 * 1024,            // 64KB
+            buffer_size: 64 * 1024, // 64KB
             atomic_operations: true,
             file_timeout_sec: 30,
             realtime_monitoring: false,
@@ -183,6 +205,8 @@ impl Default for FilesystemConfig {
                 "*.ini".to_string(),
                 "*.conf".to_string(),
                 "*.xml".to_string(),
+                "*.p12".to_string(),
+                "*.pfx".to_string(),
                 "*.py".to_string(),
                 "*.js".to_string(),
                 "*.ts".to_string(),
@@ -211,105 +235,144 @@ impl Default for FilesystemConfig {
 }
 
 /// Filesystem scanning statistics
+#[allow(dead_code)]
 #[derive(Debug, Default, Clone)]
 pub struct FilesystemStats {
     /// Total files scanned
     pub files_scanned: u64,
-    
+
     /// Total directories traversed
     pub directories_traversed: u64,
-    
+
     /// Total bytes processed
     pub bytes_processed: u64,
-    
+
     /// Credentials found
     pub credentials_found: u64,
-    
+
     /// High-risk credentials found
     pub high_risk_credentials: u64,
-    
+
     /// Files skipped due to size
     pub files_skipped_size: u64,
-    
+
     /// Files skipped due to permissions
     pub files_skipped_permissions: u64,
-    
+
     /// Files skipped due to filters
     pub files_skipped_filters: u64,
-    
+
     /// Scan errors encountered
     pub scan_errors: u64,
-    
+
     /// Average scan time per file (ms)
     pub avg_scan_time_ms: u64,
-    
+
     /// Archives processed
     pub archives_processed: u64,
-    
+
     /// Symlinks followed
     pub symlinks_followed: u64,
-    
+
     /// Performance metrics
     pub performance_metrics: FilesystemPerformanceMetrics,
 }
 
 /// Performance metrics for filesystem scanning
+#[allow(dead_code)]
 #[derive(Debug, Default, Clone)]
 pub struct FilesystemPerformanceMetrics {
     /// I/O operations per second
     pub io_ops_per_sec: u64,
-    
+
     /// Memory mapping usage
     pub memory_mapping_usage: u64,
-    
+
     /// Buffer cache hits
     pub cache_hits: u64,
-    
+
     /// Buffer cache misses
     pub cache_misses: u64,
-    
+
     /// Atomic operations performed
     pub atomic_operations: u64,
-    
+
     /// Worker thread utilization
     pub thread_utilization: f64,
-    
+
     /// Disk I/O wait time (ms)
     pub disk_io_wait_ms: u64,
 }
 
 /// Filesystem scanning errors
+#[allow(dead_code)]
 #[derive(Debug, thiserror::Error)]
 pub enum FilesystemError {
+    /// Access denied while reading the path.
     #[error("Permission denied: {path}")]
-    PermissionDenied { path: String },
-    
+    PermissionDenied {
+        /// Path that triggered the permission failure.
+        path: String,
+    },
+
+    /// The requested file or directory was not found.
     #[error("File not found: {path}")]
-    FileNotFound { path: String },
-    
+    FileNotFound {
+        /// Path that could not be located.
+        path: String,
+    },
+
+    /// Provided path is not a regular file or directory.
     #[error("Path is not a file or directory: {path}")]
-    InvalidPath { path: String },
-    
+    InvalidPath {
+        /// Item that failed validation.
+        path: String,
+    },
+
+    /// File exceeded the configured maximum size.
     #[error("File too large: {path} ({size} bytes)")]
-    FileTooLarge { path: String, size: u64 },
-    
+    FileTooLarge {
+        /// Oversized file path.
+        path: String,
+        /// Actual file size that exceeded the configured limit.
+        size: u64,
+    },
+
+    /// File took too long to process.
     #[error("Scan timeout: {path}")]
-    ScanTimeout { path: String },
-    
+    ScanTimeout {
+        /// File or directory that timed out during scanning.
+        path: String,
+    },
+
+    /// The scanner exceeded its memory budget.
     #[error("Memory limit exceeded")]
     MemoryLimitExceeded,
-    
+
+    /// Symbolic link loop detected during traversal.
     #[error("Symbolic link loop detected: {path}")]
-    SymlinkLoop { path: String },
-    
+    SymlinkLoop {
+        /// Link path participating in the loop.
+        path: String,
+    },
+
+    /// Failed to unpack an archive for scanning.
     #[error("Archive extraction failed: {path}")]
-    ArchiveExtractionFailed { path: String },
-    
+    ArchiveExtractionFailed {
+        /// Archive file that failed to extract.
+        path: String,
+    },
+
+    /// The current filesystem lacks required capabilities.
     #[error("Filesystem not supported")]
     FilesystemNotSupported,
-    
+
+    /// Miscellaneous I/O error surfaced by the OS.
     #[error("I/O error: {message}")]
-    IoError { message: String },
+    IoError {
+        /// Underlying I/O error details.
+        message: String,
+    },
 }
 
 /// Check filesystem capabilities
@@ -321,7 +384,7 @@ async fn check_filesystem_capabilities() -> Result<FilesystemCapabilities> {
     let realtime_monitoring = check_realtime_monitoring_support().await;
     let large_file_support = check_large_file_support().await;
     let atomic_operations = check_atomic_operations_support().await;
-    
+
     Ok(FilesystemCapabilities {
         extended_attributes,
         memory_mapping,
@@ -343,13 +406,13 @@ async fn check_extended_attributes_support() -> bool {
             .map(|output| output.status.success())
             .unwrap_or(false)
     }
-    
+
     #[cfg(windows)]
     {
         // Windows has alternate data streams
         true
     }
-    
+
     #[cfg(not(any(unix, windows)))]
     {
         false
@@ -366,13 +429,13 @@ async fn check_symbolic_links_support() -> bool {
     {
         true
     }
-    
+
     #[cfg(windows)]
     {
         // Windows supports symbolic links but requires privileges
         std::env::var("USERPROFILE").is_ok()
     }
-    
+
     #[cfg(not(any(unix, windows)))]
     {
         false
@@ -390,19 +453,19 @@ async fn check_realtime_monitoring_support() -> bool {
         // Check for inotify support
         std::path::Path::new("/proc/sys/fs/inotify").exists()
     }
-    
+
     #[cfg(target_os = "windows")]
     {
         // Windows has ReadDirectoryChanges
         true
     }
-    
+
     #[cfg(target_os = "macos")]
     {
         // macOS has FSEvents
         true
     }
-    
+
     #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     {
         false
@@ -420,20 +483,26 @@ async fn check_atomic_operations_support() -> bool {
 }
 
 /// File system scanning target
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum ScanTarget {
     /// Single file
     File(PathBuf),
-    
+
     /// Directory with optional depth limit
-    Directory { path: PathBuf, max_depth: Option<usize> },
-    
-    /// Multiple paths
+    Directory {
+        /// Directory path that should be scanned.
+        path: PathBuf,
+        /// Optional maximum recursion depth for the directory tree.
+        max_depth: Option<usize>,
+    },
+
+    /// Multiple explicit paths
     Multiple(Vec<PathBuf>),
-    
+
     /// Entire filesystem root
     Filesystem,
-    
+
     /// Files matching glob pattern
     Glob(String),
 }
@@ -443,15 +512,16 @@ impl ScanTarget {
     pub fn file<P: Into<PathBuf>>(path: P) -> Self {
         Self::File(path.into())
     }
-    
+
     /// Create a directory target
+    #[allow(dead_code)]
     pub fn directory<P: Into<PathBuf>>(path: P) -> Self {
         Self::Directory {
             path: path.into(),
             max_depth: None,
         }
     }
-    
+
     /// Create a directory target with depth limit
     pub fn directory_with_depth<P: Into<PathBuf>>(path: P, max_depth: usize) -> Self {
         Self::Directory {
@@ -459,13 +529,14 @@ impl ScanTarget {
             max_depth: Some(max_depth),
         }
     }
-    
+
     /// Create multiple targets
     pub fn multiple<P: Into<PathBuf>, I: IntoIterator<Item = P>>(paths: I) -> Self {
         Self::Multiple(paths.into_iter().map(|p| p.into()).collect())
     }
-    
+
     /// Create glob pattern target
+    #[allow(dead_code)]
     pub fn glob<S: Into<String>>(pattern: S) -> Self {
         Self::Glob(pattern.into())
     }
@@ -474,14 +545,14 @@ impl ScanTarget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_filesystem_subsystem_init() {
         let result = initialize_filesystem_subsystem().await;
         // Should not fail on initialization
         assert!(result.is_ok());
     }
-    
+
     #[test]
     fn test_filesystem_config_default() {
         let config = FilesystemConfig::default();
@@ -490,18 +561,18 @@ mod tests {
         assert!(config.scan_archives);
         assert!(!config.follow_symlinks);
     }
-    
+
     #[test]
     fn test_scan_target_creation() {
         let file_target = ScanTarget::file("/path/to/file.txt");
         let dir_target = ScanTarget::directory("/path/to/dir");
         let glob_target = ScanTarget::glob("*.env");
-        
+
         assert!(matches!(file_target, ScanTarget::File(_)));
         assert!(matches!(dir_target, ScanTarget::Directory { .. }));
         assert!(matches!(glob_target, ScanTarget::Glob(_)));
     }
-    
+
     #[test]
     fn test_filesystem_stats_default() {
         let stats = FilesystemStats::default();
@@ -509,12 +580,12 @@ mod tests {
         assert_eq!(stats.credentials_found, 0);
         assert_eq!(stats.bytes_processed, 0);
     }
-    
+
     #[tokio::test]
     async fn test_capabilities_check() {
         let capabilities = check_filesystem_capabilities().await;
         assert!(capabilities.is_ok());
-        
+
         let caps = capabilities.unwrap();
         // Memory mapping should be available on most systems
         assert!(caps.memory_mapping);

@@ -180,6 +180,7 @@ graph TB
 - **Dry-Run Mode**: Safe analysis without modifications
 - **Quarantine Actions**: Isolate credentials without breaking systems
 - **Batch Operations**: Scan entire infrastructure simultaneously
+- **Memory Intercept Hooks**: Set `ECH_LOG_MEMORY_READS=1` to register a logging `MemoryInterceptHook` that traces process reads for debugging.
 
 ## 🛠️ TECHNICAL SPECIFICATIONS
 

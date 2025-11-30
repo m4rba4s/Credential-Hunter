@@ -1,9 +1,9 @@
 /**
  * ECH Detection Engine - Core Credential Detection Orchestrator
- * 
+ *
  * This is the main detection engine that coordinates all credential detection
  * strategies and provides a unified interface for credential hunting operations.
- * 
+ *
  * Features:
  * - Multi-strategy detection (patterns, entropy, ML, context)
  * - Performance optimization with SIMD and parallel processing
@@ -11,21 +11,20 @@
  * - False positive reduction with context analysis
  * - Enterprise-grade reporting and audit trails
  */
-
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 use super::{
-    patterns::{PatternRegistry, PatternMatch},
-    entropy::EntropyAnalyzer,
-    context::ContextAnalyzer,
     classifier::MLClassifier,
+    context::ContextAnalyzer,
+    entropy::EntropyAnalyzer,
+    patterns::{PatternMatch, PatternRegistry},
 };
 
 #[cfg(feature = "yara-integration")]
@@ -35,23 +34,23 @@ use super::yara_integration::YaraScanner;
 pub struct DetectionEngine {
     /// Pattern-based detection registry
     pattern_registry: Arc<PatternRegistry>,
-    
+
     /// Entropy analysis engine
     entropy_analyzer: Arc<EntropyAnalyzer>,
-    
+
     /// Context-aware validation
     context_analyzer: Arc<ContextAnalyzer>,
-    
+
     /// Machine learning classifier
     ml_classifier: Option<Arc<MLClassifier>>,
-    
+
     /// YARA rule scanner
     #[cfg(feature = "yara-integration")]
     yara_scanner: Option<Arc<YaraScanner>>,
-    
+
     /// Detection statistics
     stats: Arc<RwLock<DetectionStats>>,
-    
+
     /// Configuration
     config: DetectionConfig,
 }
@@ -61,34 +60,34 @@ pub struct DetectionEngine {
 pub struct DetectionResult {
     /// Unique identifier for this detection
     pub id: Uuid,
-    
+
     /// Type of credential detected
     pub credential_type: CredentialType,
-    
+
     /// Confidence level of detection
     pub confidence: ConfidenceLevel,
-    
+
     /// Raw detected value (masked for security)
     pub masked_value: String,
-    
+
     /// Full value (only in dry-run mode)
     pub full_value: Option<String>,
-    
+
     /// Location where credential was found
     pub location: CredentialLocation,
-    
+
     /// Context surrounding the credential
     pub context: CredentialContext,
-    
+
     /// Detection metadata
     pub metadata: DetectionMetadata,
-    
+
     /// Risk assessment
     pub risk_level: RiskLevel,
-    
+
     /// Recommended actions
     pub recommended_actions: Vec<String>,
-    
+
     /// Detection timestamp
     pub timestamp: DateTime<Utc>,
 }
@@ -97,72 +96,117 @@ pub struct DetectionResult {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CredentialType {
     // Cloud Provider Credentials
+    /// AWS IAM access key ID (AKIA prefix).
     AwsAccessKey,
+    /// AWS secret access key material.
     AwsSecretKey,
+    /// Temporary AWS session token.
     AwsSessionToken,
+    /// Azure AD application client secret.
     AzureClientSecret,
+    /// Azure Storage account access key.
     AzureStorageKey,
+    /// Google Cloud service account JSON credential.
     GcpServiceKey,
+    /// Google Cloud API key value.
     GcpApiKey,
-    
+
     // Database Credentials
+    /// Generic database password string.
     DatabasePassword,
+    /// MongoDB URI/connection string with secrets.
     MongoDbConnectionString,
+    /// Redis authentication password or token.
     RedisPassword,
+    /// PostgreSQL login password.
     PostgreSqlPassword,
+    /// MySQL login password.
     MySqlPassword,
-    
+
     // API Keys and Tokens
+    /// GitHub personal access token (classic or fine-grained).
     GitHubToken,
+    /// Slack bot or user token.
     SlackToken,
+    /// Stripe secret API key.
     StripeApiKey,
+    /// Twilio REST API token.
     TwilioApiKey,
+    /// SendGrid API token.
     SendGridApiKey,
+    /// JSON Web Token (JWT) credential.
     JwtToken,
+    /// Generic bearer token string.
     BearerToken,
-    
+
     // Cryptographic Material
+    /// PEM-encoded RSA private key.
     RsaPrivateKey,
+    /// PEM-encoded ECDSA private key.
     EcdsaPrivateKey,
+    /// PEM-encoded Ed25519 private key.
     Ed25519PrivateKey,
+    /// X.509 certificate content.
     X509Certificate,
+    /// Generic PEM certificate or key bundle.
     PemCertificate,
-    
+    /// PKCS#12 / PFX archive containing certificates and keys.
+    Pkcs12Bundle,
+
     // Authentication
+    /// Generic password string.
     Password,
+    /// Secret associated with an API client ID.
     ApiSecret,
+    /// Application session token/cookie value.
     SessionToken,
+    /// OAuth client credential or refresh token.
     OauthToken,
-    
+
     // Personal Information
+    /// U.S. Social Security Number or equivalent pattern.
     SocialSecurityNumber,
+    /// Payment card number (PAN).
     CreditCardNumber,
+    /// Email address leaked in plaintext.
     EmailAddress,
+    /// Telephone number stored as sensitive data.
     PhoneNumber,
-    
+
     // Generic High-Entropy String
+    /// Anything that looks like an opaque high-entropy secret.
     HighEntropyString,
-    
+
     // Custom Pattern
+    /// User-defined credential type coming from custom patterns.
     Custom(String),
 }
 
 /// Confidence levels for detections
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ConfidenceLevel {
-    Low,      // 0-25%
-    Medium,   // 26-75%
-    High,     // 76-95%
-    Critical, // 96-100%
+    /// Low confidence (0-25%).
+    Low,
+    /// Medium confidence (26-75%).
+    Medium,
+    /// High confidence (76-95%).
+    High,
+    /// Critical confidence (96-100%).
+    Critical,
 }
 
 /// Risk levels for security assessment
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum RiskLevel {
+    /// Informational finding (no remediation required).
     Info,
+    /// Low-risk credential exposure.
     Low,
+    /// Medium-risk exposure requiring attention.
     Medium,
+    /// High-risk credential exposure.
     High,
+    /// Critical exposure requiring immediate remediation.
     Critical,
 }
 
@@ -171,22 +215,22 @@ pub enum RiskLevel {
 pub struct CredentialLocation {
     /// Source type (file, memory, environment, etc.)
     pub source_type: String,
-    
+
     /// Full path or identifier
     pub path: String,
-    
+
     /// Line number (for text files)
     pub line_number: Option<usize>,
-    
+
     /// Column position
     pub column: Option<usize>,
-    
+
     /// Memory address (for memory scans)
     pub memory_address: Option<u64>,
-    
+
     /// Process ID (for memory scans)
     pub process_id: Option<u32>,
-    
+
     /// Container ID (for container scans)
     pub container_id: Option<String>,
 }
@@ -196,16 +240,16 @@ pub struct CredentialLocation {
 pub struct CredentialContext {
     /// Surrounding text/code
     pub surrounding_text: String,
-    
+
     /// Variable name or key
     pub variable_name: Option<String>,
-    
+
     /// File type or format
     pub file_type: Option<String>,
-    
+
     /// Language or technology detected
     pub language: Option<String>,
-    
+
     /// Additional context clues
     pub context_clues: Vec<String>,
 }
@@ -215,19 +259,19 @@ pub struct CredentialContext {
 pub struct DetectionMetadata {
     /// Detection methods used
     pub detection_methods: Vec<String>,
-    
+
     /// Pattern that matched
     pub pattern_name: Option<String>,
-    
+
     /// Entropy score
     pub entropy_score: Option<f64>,
-    
+
     /// ML confidence score
     pub ml_confidence: Option<f64>,
-    
+
     /// YARA rule matches
     pub yara_matches: Vec<String>,
-    
+
     /// Processing time (microseconds)
     pub processing_time_us: u64,
 }
@@ -237,19 +281,19 @@ pub struct DetectionMetadata {
 pub struct DetectionStats {
     /// Total credentials detected
     pub total_detections: u64,
-    
+
     /// Detections by type
     pub detections_by_type: HashMap<CredentialType, u64>,
-    
+
     /// Detections by confidence
     pub detections_by_confidence: HashMap<ConfidenceLevel, u64>,
-    
+
     /// False positives identified
     pub false_positives: u64,
-    
+
     /// Processing performance
     pub avg_processing_time_us: u64,
-    
+
     /// Data processed (bytes)
     pub bytes_processed: u64,
 }
@@ -259,28 +303,30 @@ pub struct DetectionStats {
 pub struct DetectionConfig {
     /// Enable pattern-based detection
     pub enable_patterns: bool,
-    
+
     /// Enable entropy analysis
     pub enable_entropy: bool,
-    
+
     /// Enable ML classification
     pub enable_ml: bool,
-    
+
     /// Enable context analysis
     pub enable_context: bool,
-    
+
     /// Enable YARA scanning
     pub enable_yara: bool,
-    
+
     /// Minimum confidence threshold
     pub min_confidence: ConfidenceLevel,
-    
+
     /// Maximum false positive rate
     pub max_false_positive_rate: f64,
-    
+
     /// Performance settings
     pub parallel_workers: usize,
+    /// Enable SIMD optimizations in the detection pipeline.
     pub enable_simd: bool,
+    /// Maximum memory allocated to detection tasks (bytes).
     pub max_memory_usage: usize,
 }
 
@@ -305,55 +351,59 @@ impl DetectionEngine {
     /// Create a new detection engine
     pub async fn new(config: DetectionConfig) -> Result<Self> {
         info!("🔍 Initializing ECH Detection Engine");
-        
+        debug!(
+            min_confidence = ?config.min_confidence,
+            max_false_positive_rate = config.max_false_positive_rate,
+            parallel_workers = config.parallel_workers,
+            "Detection configuration"
+        );
+
         // Initialize pattern registry
         let pattern_registry = Arc::new(
             PatternRegistry::new()
                 .await
-                .context("Failed to initialize pattern registry")?
+                .context("Failed to initialize pattern registry")?,
         );
-        
+
         // Initialize entropy analyzer
         let entropy_analyzer = Arc::new(
-            EntropyAnalyzer::new(4.5, 8, 1024) // threshold, min_len, max_len
+            EntropyAnalyzer::new(4.5, 8, 1024), // threshold, min_len, max_len
         );
-        
+
         // Initialize context analyzer
-        let context_analyzer = Arc::new(
-            ContextAnalyzer::new()
-                .context("Failed to initialize context analyzer")?
-        );
-        
+        let context_analyzer =
+            Arc::new(ContextAnalyzer::new().context("Failed to initialize context analyzer")?);
+
         // Initialize ML classifier if enabled
         let ml_classifier = if config.enable_ml {
             Some(Arc::new(
                 MLClassifier::new()
                     .await
-                    .context("Failed to initialize ML classifier")?
+                    .context("Failed to initialize ML classifier")?,
             ))
         } else {
             None
         };
-        
+
         // Initialize YARA scanner if enabled
         #[cfg(feature = "yara-integration")]
         let yara_scanner = if config.enable_yara {
             Some(Arc::new(
-                YaraScanner::new()
-                    .await
-                    .context("Failed to initialize YARA scanner")?
+                YaraScanner::new().context("Failed to initialize YARA scanner")?,
             ))
         } else {
             None
         };
-        
+
         #[cfg(not(feature = "yara-integration"))]
-        let yara_scanner = None;
-        
+        {
+            // YARA integration disabled
+        }
+
         let stats = Arc::new(RwLock::new(DetectionStats::default()));
-        
+
         info!("✅ Detection engine initialized successfully");
-        
+
         Ok(Self {
             pattern_registry,
             entropy_analyzer,
@@ -365,7 +415,7 @@ impl DetectionEngine {
             config,
         })
     }
-    
+
     /// Detect credentials in text content
     pub async fn detect_in_text(
         &self,
@@ -374,74 +424,96 @@ impl DetectionEngine {
     ) -> Result<Vec<DetectionResult>> {
         let start_time = std::time::Instant::now();
         let mut results = Vec::new();
-        
+
         debug!("🔍 Scanning text content: {} chars", content.len());
-        
+
         // Pattern-based detection
         if self.config.enable_patterns {
-            let pattern_matches = self.pattern_registry
+            let pattern_matches = self
+                .pattern_registry
                 .scan_text(content)
                 .await
                 .context("Pattern scanning failed")?;
-            
+
             for pattern_match in pattern_matches {
-                if let Some(result) = self.create_detection_result(
-                    pattern_match,
-                    &location,
-                    content,
-                ).await? {
+                if let Some(result) = self
+                    .create_detection_result(pattern_match, &location, content)
+                    .await?
+                {
                     results.push(result);
                 }
             }
         }
-        
+
         // Entropy-based detection
         if self.config.enable_entropy {
-            let entropy_matches = self.entropy_analyzer
-                .analyze_text(content)
-                .await;
-            
+            let entropy_matches = self.entropy_analyzer.analyze_text(content).await;
+
             for entropy_match in entropy_matches {
-                if let Some(result) = self.process_entropy_match(
-                    entropy_match,
-                    &location,
-                    content,
-                ).await? {
+                if let Some(result) = self
+                    .process_entropy_match(entropy_match, &location, content)
+                    .await?
+                {
                     results.push(result);
                 }
             }
         }
-        
+
         // ML classification
         if let Some(ref ml_classifier) = self.ml_classifier {
             let ml_results = ml_classifier
                 .classify_text(content)
                 .await
                 .context("ML classification failed")?;
-            
+
             for ml_result in ml_results {
-                if let Some(result) = self.process_ml_result(
-                    ml_result,
-                    &location,
-                    content,
-                ).await? {
+                if let Some(result) = self
+                    .process_ml_result(ml_result, &location, content)
+                    .await?
+                {
                     results.push(result);
                 }
             }
         }
-        
+
+        #[cfg(feature = "yara-integration")]
+        if self.config.enable_yara {
+            if let Some(ref yara_scanner) = self.yara_scanner {
+                let yara_hits = yara_scanner
+                    .scan_bytes(content.as_bytes())
+                    .await
+                    .context("YARA scan failed")?;
+
+                for rule in yara_hits {
+                    let detection = self.create_yara_detection(rule, &location, content).await?;
+                    results.push(detection);
+                }
+            }
+        }
+
         // Context validation and false positive reduction
         if self.config.enable_context {
             results = self.validate_with_context(results, content).await?;
         }
-        
+
         // Update statistics
         self.update_stats(&results, start_time.elapsed()).await;
-        
+
+        if tracing::level_enabled!(tracing::Level::DEBUG) {
+            let pattern_stats = self.pattern_registry.get_stats();
+            debug!(
+                patterns_loaded = pattern_stats.patterns_loaded,
+                custom_patterns = pattern_stats.custom_patterns,
+                total_pattern_matches = pattern_stats.total_matches,
+                last_pattern_matches = pattern_stats.last_scan_matches,
+                "Pattern registry telemetry"
+            );
+        }
+
         debug!("🎯 Found {} potential credentials", results.len());
         Ok(results)
     }
-    
+
     /// Detect credentials in binary data
     pub async fn detect_in_binary(
         &self,
@@ -450,22 +522,24 @@ impl DetectionEngine {
     ) -> Result<Vec<DetectionResult>> {
         // Extract strings from binary data
         let strings = self.extract_strings_from_binary(data);
-        
+
         let mut results = Vec::new();
         for string_data in strings {
-            let mut string_results = self.detect_in_text(&string_data.content, location.clone()).await?;
-            
+            let mut string_results = self
+                .detect_in_text(&string_data.content, location.clone())
+                .await?;
+
             // Adjust locations for binary context
             for result in &mut string_results {
                 result.location.memory_address = Some(string_data.offset as u64);
             }
-            
+
             results.extend(string_results);
         }
-        
+
         Ok(results)
     }
-    
+
     /// Create detection result from pattern match
     async fn create_detection_result(
         &self,
@@ -474,20 +548,24 @@ impl DetectionEngine {
         content: &str,
     ) -> Result<Option<DetectionResult>> {
         let confidence = self.calculate_confidence(&pattern_match);
-        
+
         if confidence < self.config.min_confidence {
             return Ok(None);
         }
-        
+
         let context = self.extract_context(content, pattern_match.start, pattern_match.end);
         let risk_level = self.assess_risk(&pattern_match.credential_type, &context);
-        
+
         let result = DetectionResult {
             id: Uuid::new_v4(),
-            credential_type: pattern_match.credential_type,
+            credential_type: pattern_match.credential_type.clone(),
             confidence,
             masked_value: self.mask_value(&pattern_match.value),
-            full_value: if self.is_dry_run() { Some(pattern_match.value) } else { None },
+            full_value: if self.is_dry_run() {
+                Some(pattern_match.value)
+            } else {
+                None
+            },
             location: location.clone(),
             context: CredentialContext {
                 surrounding_text: context,
@@ -498,43 +576,48 @@ impl DetectionEngine {
             },
             metadata: DetectionMetadata {
                 detection_methods: vec!["pattern_matching".to_string()],
-                pattern_name: Some(pattern_match.pattern_name),
+                pattern_name: Some(pattern_match.pattern_name.clone()),
                 entropy_score: None,
                 ml_confidence: None,
                 yara_matches: Vec::new(),
                 processing_time_us: 0,
             },
-            risk_level,
-            recommended_actions: self.get_recommended_actions(&pattern_match.credential_type, &risk_level),
+            risk_level: risk_level.clone(),
+            recommended_actions: self
+                .get_recommended_actions(&pattern_match.credential_type, &risk_level),
             timestamp: Utc::now(),
         };
-        
+
         Ok(Some(result))
     }
-    
+
     /// Process entropy-based match
     async fn process_entropy_match(
         &self,
-        entropy_match: EntropyMatch,
+        entropy_match: super::entropy::EntropyResult,
         location: &CredentialLocation,
         content: &str,
     ) -> Result<Option<DetectionResult>> {
         // Enhanced entropy analysis with context
         let context_text = self.extract_context(content, entropy_match.start, entropy_match.end);
         let credential_type = self.infer_credential_type(&entropy_match.value, &context_text);
-        
-        let confidence = self.calculate_entropy_confidence(entropy_match.entropy_score);
-        
+
+        let confidence = self.calculate_entropy_confidence(entropy_match.entropy);
+
         if confidence < self.config.min_confidence {
             return Ok(None);
         }
-        
+
         let result = DetectionResult {
             id: Uuid::new_v4(),
-            credential_type,
+            credential_type: credential_type.clone(),
             confidence,
             masked_value: self.mask_value(&entropy_match.value),
-            full_value: if self.is_dry_run() { Some(entropy_match.value) } else { None },
+            full_value: if self.is_dry_run() {
+                Some(entropy_match.value)
+            } else {
+                None
+            },
             location: location.clone(),
             context: CredentialContext {
                 surrounding_text: context_text.clone(),
@@ -546,7 +629,7 @@ impl DetectionEngine {
             metadata: DetectionMetadata {
                 detection_methods: vec!["entropy_analysis".to_string()],
                 pattern_name: None,
-                entropy_score: Some(entropy_match.entropy_score),
+                entropy_score: Some(entropy_match.entropy),
                 ml_confidence: None,
                 yara_matches: Vec::new(),
                 processing_time_us: 0,
@@ -555,29 +638,34 @@ impl DetectionEngine {
             recommended_actions: self.get_recommended_actions(&credential_type, &RiskLevel::Medium),
             timestamp: Utc::now(),
         };
-        
+
         Ok(Some(result))
     }
-    
+
     /// Process ML classification result
     async fn process_ml_result(
         &self,
-        ml_result: MLResult,
+        ml_result: super::classifier::MLResult,
         location: &CredentialLocation,
         content: &str,
     ) -> Result<Option<DetectionResult>> {
-        if ml_result.confidence < 0.7 { // ML threshold
+        if ml_result.confidence < 0.7 {
+            // ML threshold
             return Ok(None);
         }
-        
+
         let context_text = self.extract_context(content, ml_result.start, ml_result.end);
-        
+
         let result = DetectionResult {
             id: Uuid::new_v4(),
-            credential_type: ml_result.credential_type,
+            credential_type: ml_result.credential_type.clone(),
             confidence: self.ml_confidence_to_level(ml_result.confidence),
             masked_value: self.mask_value(&ml_result.value),
-            full_value: if self.is_dry_run() { Some(ml_result.value) } else { None },
+            full_value: if self.is_dry_run() {
+                Some(ml_result.value)
+            } else {
+                None
+            },
             location: location.clone(),
             context: CredentialContext {
                 surrounding_text: context_text,
@@ -595,58 +683,102 @@ impl DetectionEngine {
                 processing_time_us: 0,
             },
             risk_level: RiskLevel::Medium,
-            recommended_actions: self.get_recommended_actions(&ml_result.credential_type, &RiskLevel::Medium),
+            recommended_actions: self
+                .get_recommended_actions(&ml_result.credential_type, &RiskLevel::Medium),
             timestamp: Utc::now(),
         };
-        
+
         Ok(Some(result))
     }
-    
+
+    #[cfg(feature = "yara-integration")]
+    async fn create_yara_detection(
+        &self,
+        rule_name: String,
+        location: &CredentialLocation,
+        content: &str,
+    ) -> Result<DetectionResult> {
+        let context_text = self.extract_context(content, 0, content.len());
+
+        Ok(DetectionResult {
+            id: Uuid::new_v4(),
+            credential_type: CredentialType::Custom(rule_name.clone()),
+            confidence: ConfidenceLevel::High,
+            masked_value: self.mask_value(&rule_name),
+            full_value: if self.is_dry_run() {
+                Some(rule_name.clone())
+            } else {
+                None
+            },
+            location: location.clone(),
+            context: CredentialContext {
+                surrounding_text: context_text,
+                variable_name: None,
+                file_type: self.detect_file_type(&location.path),
+                language: self.detect_language(content),
+                context_clues: Vec::new(),
+            },
+            metadata: DetectionMetadata {
+                detection_methods: vec!["yara".to_string()],
+                pattern_name: None,
+                entropy_score: None,
+                ml_confidence: None,
+                yara_matches: vec![rule_name],
+                processing_time_us: 0,
+            },
+            risk_level: RiskLevel::High,
+            recommended_actions: vec![
+                "Validate YARA rule match".to_string(),
+                "Investigate matched artifact".to_string(),
+            ],
+            timestamp: Utc::now(),
+        })
+    }
+
     /// Validate results with context analysis
     async fn validate_with_context(
         &self,
-        mut results: Vec<DetectionResult>,
+        results: Vec<DetectionResult>,
         content: &str,
     ) -> Result<Vec<DetectionResult>> {
-        let validated_results = Vec::new();
-        
+        let mut validated_results = Vec::new();
+
         for mut result in results {
-            let validation_score = self.context_analyzer
+            let validation_score = self
+                .context_analyzer
                 .validate_credential(&result, content)
                 .await
                 .context("Context validation failed")?;
-            
-            if validation_score > 0.3 { // Context validation threshold
+
+            if validation_score > 0.3 {
                 // Adjust confidence based on context
-                result.confidence = self.adjust_confidence_with_context(
-                    result.confidence,
-                    validation_score
-                );
+                result.confidence =
+                    self.adjust_confidence_with_context(result.confidence, validation_score);
                 validated_results.push(result);
             }
         }
-        
+
         Ok(validated_results)
     }
-    
+
     /// Extract context around a detection
     fn extract_context(&self, content: &str, start: usize, end: usize) -> String {
         let context_size = 100;
         let start_pos = start.saturating_sub(context_size);
         let end_pos = std::cmp::min(end + context_size, content.len());
-        
+
         content[start_pos..end_pos].to_string()
     }
-    
+
     /// Mask sensitive values for safe logging
     fn mask_value(&self, value: &str) -> String {
         if value.len() <= 8 {
             "*".repeat(value.len())
         } else {
-            format!("{}***{}", &value[..2], &value[value.len()-2..])
+            format!("{}***{}", &value[..2], &value[value.len() - 2..])
         }
     }
-    
+
     /// Calculate confidence level from pattern match
     fn calculate_confidence(&self, pattern_match: &PatternMatch) -> ConfidenceLevel {
         match pattern_match.confidence_score {
@@ -656,7 +788,7 @@ impl DetectionEngine {
             _ => ConfidenceLevel::Critical,
         }
     }
-    
+
     /// Calculate confidence from entropy score
     fn calculate_entropy_confidence(&self, entropy: f64) -> ConfidenceLevel {
         match entropy {
@@ -666,7 +798,7 @@ impl DetectionEngine {
             _ => ConfidenceLevel::Critical,
         }
     }
-    
+
     /// Convert ML confidence to confidence level
     fn ml_confidence_to_level(&self, confidence: f64) -> ConfidenceLevel {
         match confidence {
@@ -676,12 +808,14 @@ impl DetectionEngine {
             _ => ConfidenceLevel::Critical,
         }
     }
-    
+
     /// Assess risk level for a credential type
     fn assess_risk(&self, credential_type: &CredentialType, context: &str) -> RiskLevel {
         match credential_type {
             CredentialType::AwsAccessKey | CredentialType::AwsSecretKey => RiskLevel::Critical,
-            CredentialType::RsaPrivateKey | CredentialType::EcdsaPrivateKey => RiskLevel::High,
+            CredentialType::RsaPrivateKey
+            | CredentialType::EcdsaPrivateKey
+            | CredentialType::Pkcs12Bundle => RiskLevel::High,
             CredentialType::DatabasePassword => RiskLevel::High,
             CredentialType::ApiSecret => RiskLevel::Medium,
             CredentialType::HighEntropyString => {
@@ -694,11 +828,15 @@ impl DetectionEngine {
             _ => RiskLevel::Medium,
         }
     }
-    
+
     /// Get recommended actions for credential type and risk level
-    fn get_recommended_actions(&self, credential_type: &CredentialType, risk_level: &RiskLevel) -> Vec<String> {
+    fn get_recommended_actions(
+        &self,
+        _credential_type: &CredentialType,
+        risk_level: &RiskLevel,
+    ) -> Vec<String> {
         let mut actions = Vec::new();
-        
+
         match risk_level {
             RiskLevel::Critical => {
                 actions.push("IMMEDIATE: Rotate credential".to_string());
@@ -717,81 +855,76 @@ impl DetectionEngine {
                 actions.push("Monitor and review".to_string());
             }
         }
-        
+
         actions
     }
-    
+
     /// Update detection statistics
-    async fn update_stats(&self, results: &[DetectionResult], processing_time: std::time::Duration) {
+    async fn update_stats(
+        &self,
+        results: &[DetectionResult],
+        processing_time: std::time::Duration,
+    ) {
         let mut stats = self.stats.write().await;
-        
+
         stats.total_detections += results.len() as u64;
-        
+
         for result in results {
-            *stats.detections_by_type.entry(result.credential_type.clone()).or_insert(0) += 1;
-            *stats.detections_by_confidence.entry(result.confidence.clone()).or_insert(0) += 1;
+            *stats
+                .detections_by_type
+                .entry(result.credential_type.clone())
+                .or_insert(0) += 1;
+            *stats
+                .detections_by_confidence
+                .entry(result.confidence.clone())
+                .or_insert(0) += 1;
         }
-        
+
         // Update average processing time
         let processing_us = processing_time.as_micros() as u64;
-        stats.avg_processing_time_us = 
-            (stats.avg_processing_time_us + processing_us) / 2;
+        stats.avg_processing_time_us = (stats.avg_processing_time_us + processing_us) / 2;
     }
-    
+
     /// Check if running in dry-run mode
     fn is_dry_run(&self) -> bool {
         // This would be set from the main config
         std::env::var("ECH_DRY_RUN").is_ok()
     }
-    
+
     /// Additional helper methods would go here...
     fn extract_strings_from_binary(&self, _data: &[u8]) -> Vec<BinaryString> {
         // Implementation for extracting strings from binary data
         Vec::new()
     }
-    
+
     fn infer_credential_type(&self, _value: &str, _context: &str) -> CredentialType {
         CredentialType::HighEntropyString
     }
-    
+
     fn detect_file_type(&self, path: &str) -> Option<String> {
         std::path::Path::new(path)
             .extension()
             .and_then(|ext| ext.to_str())
             .map(|s| s.to_string())
     }
-    
+
     fn detect_language(&self, _content: &str) -> Option<String> {
         // Implementation for language detection
         None
     }
-    
+
     fn extract_variable_name(&self, _context: &str) -> Option<String> {
         // Implementation for variable name extraction
         None
     }
-    
-    fn adjust_confidence_with_context(&self, confidence: ConfidenceLevel, _validation_score: f64) -> ConfidenceLevel {
+
+    fn adjust_confidence_with_context(
+        &self,
+        confidence: ConfidenceLevel,
+        _validation_score: f64,
+    ) -> ConfidenceLevel {
         confidence
     }
-}
-
-// Additional types for internal use
-#[derive(Debug)]
-struct EntropyMatch {
-    value: String,
-    start: usize,
-    end: usize,
-    entropy_score: f64,
-}
-
-#[derive(Debug)]
-struct MLResult {
-    value: String,
-    start: usize,
-    end: usize,
-    credential_type: CredentialType,
-    confidence: f64,
 }
 
 #[derive(Debug)]
@@ -803,7 +936,7 @@ struct BinaryString {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_detection_engine_creation() {
         let config = DetectionConfig {
@@ -818,11 +951,35 @@ mod tests {
             enable_simd: true,
             max_memory_usage: 1024 * 1024 * 100, // 100MB
         };
-        
+
         let engine = DetectionEngine::new(config).await;
         assert!(engine.is_ok());
     }
-    
+
+    #[tokio::test]
+    async fn detects_password_in_env_line() {
+        let engine = DetectionEngine::new(DetectionConfig {
+            enable_context: false,
+            ..DetectionConfig::default()
+        })
+        .await
+        .unwrap();
+        let location = CredentialLocation {
+            source_type: "test".to_string(),
+            path: "memory".to_string(),
+            line_number: None,
+            column: None,
+            memory_address: None,
+            process_id: None,
+            container_id: None,
+        };
+        let content = include_str!("../../testdata/env/.env");
+        let results = engine.detect_in_text(content, location).await.unwrap();
+        assert!(results
+            .iter()
+            .any(|r| matches!(r.credential_type, CredentialType::Password)));
+    }
+
     #[tokio::test]
     async fn test_aws_key_detection() {
         let config = DetectionConfig {
@@ -837,9 +994,9 @@ mod tests {
             enable_simd: false,
             max_memory_usage: 1024 * 1024,
         };
-        
+
         let engine = DetectionEngine::new(config).await.unwrap();
-        
+
         let test_content = "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE";
         let location = CredentialLocation {
             source_type: "file".to_string(),
@@ -850,12 +1007,15 @@ mod tests {
             process_id: None,
             container_id: None,
         };
-        
+
         let results = engine.detect_in_text(test_content, location).await.unwrap();
         assert!(!results.is_empty());
-        
+
         let result = &results[0];
-        assert!(matches!(result.credential_type, CredentialType::AwsAccessKey));
+        assert!(matches!(
+            result.credential_type,
+            CredentialType::AwsAccessKey
+        ));
         assert!(result.confidence >= ConfidenceLevel::Medium);
     }
 }

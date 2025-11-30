@@ -1,0 +1,4 @@
+secrets:
+  slack_token: SLACK_USER_TOKEN_DUMMY
+  azure_client_secret: 0cd1c2aa-SECRET-4d37-9d50-0c29df8db123
+  redis_password: "UltraRedisSecret!"

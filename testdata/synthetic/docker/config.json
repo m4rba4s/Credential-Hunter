@@ -1,0 +1,9 @@
+{
+  "auths": {
+    "registry.example.com": {
+      "auth": "cmVnaXN0cnl1c2VyOnJlZ2lzdHJ5U3VwZXJTZWNyZXQh",
+      "slack_token": "SLACK_TOKEN_DUMMY",
+      "jwt": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmaXh0dXJlIn0.signature"
+    }
+  }
+}

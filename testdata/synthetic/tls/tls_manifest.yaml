@@ -1,0 +1,8 @@
+kind: tls-fixture
+metadata:
+  name: synthetic-client-auth
+spec:
+  p12_path: client_auth.p12
+  password: changeme
+  notes: "Synthetic P12 bundle for detection regression; safe to share."
+  service_token: "SLACK_SERVICE_TOKEN_DUMMY"
