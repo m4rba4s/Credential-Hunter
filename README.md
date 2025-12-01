@@ -276,4 +276,4 @@ ECH is designed for Fortune 500 environments with:
 
 *Built by senior DFIR engineers who understand that security is not a feature, it's a mindset.*
 
-Licence - funcybot@gmail.com
+Licence MIT - funcybot@gmail.com
