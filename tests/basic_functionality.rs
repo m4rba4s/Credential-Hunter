@@ -62,8 +62,13 @@ mod tests {
 
     #[test]
     fn test_credential_patterns() {
-        let slack_bot = ["xox", "b", "-1234567890123-1234567890123-", "abcdefghijklmnopqrstuvwx"]
-            .concat();
+        let slack_bot = [
+            "xox",
+            "b",
+            "-1234567890123-1234567890123-",
+            "abcdefghijklmnopqrstuvwx",
+        ]
+        .concat();
         let test_cases = vec![
             ("GitHub Token", "ghp_1234567890123456789012345678901234567890", r"ghp_[a-zA-Z0-9]{40}"),
             ("Slack Bot Token", slack_bot.as_str(), r"xoxb-[0-9]{13}-[0-9]{13}-[a-zA-Z0-9]{24}"),

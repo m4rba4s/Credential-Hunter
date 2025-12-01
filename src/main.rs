@@ -35,6 +35,7 @@ use crate::core::{
     config::{EchConfig, LogLevel, OutputFormat},
     engine::EchEngine,
     logging::FancyLogFormatter,
+    output,
     security::SecurityContext,
 };
 
@@ -117,6 +118,13 @@ fn build_cli() -> ClapCommand {
                 .action(ArgAction::Append)
         )
         .arg(
+            Arg::new("path")
+                .long("path")
+                .help("Convenience alias for --target when scanning filesystem paths")
+                .value_name("PATH")
+                .action(ArgAction::Append)
+        )
+        .arg(
             Arg::new("config")
                 .long("config")
                 .short('c')
@@ -156,6 +164,12 @@ fn build_cli() -> ClapCommand {
                 .default_value("json")
         )
         .arg(
+            Arg::new("extensions")
+                .long("extensions")
+                .help("Comma-separated file extensions to include (e.g. .js,.ts,.json)")
+                .value_name("LIST")
+        )
+        .arg(
             Arg::new("verbose")
                 .long("verbose")
                 .short('v')
@@ -167,6 +181,12 @@ fn build_cli() -> ClapCommand {
                 .long("quiet")
                 .short('q')
                 .help("Quiet mode (minimal output)")
+                .action(ArgAction::SetTrue)
+        )
+        .arg(
+            Arg::new("ci")
+                .long("ci")
+                .help("CI-friendly mode: structured output, no colors, exit 1 on findings")
                 .action(ArgAction::SetTrue)
         )
         .arg(
@@ -263,7 +283,7 @@ fn build_cli() -> ClapCommand {
         )
 }
 
-fn setup_logging(log_level: LogLevel, quiet: bool) -> Result<()> {
+fn setup_logging(log_level: LogLevel, quiet: bool, ci_mode: bool) -> Result<()> {
     let level = if quiet {
         tracing::Level::ERROR
     } else {
@@ -284,7 +304,7 @@ fn setup_logging(log_level: LogLevel, quiet: bool) -> Result<()> {
         )
         .with(
             tracing_subscriber::fmt::layer()
-                .with_ansi(true)
+                .with_ansi(!ci_mode && !quiet)
                 .with_target(false)
                 .with_thread_ids(false)
                 .with_thread_names(false)
@@ -293,7 +313,7 @@ fn setup_logging(log_level: LogLevel, quiet: bool) -> Result<()> {
 
     subscriber.init();
 
-    if !quiet {
+    if !quiet && !ci_mode {
         crate::core::logging::emit_banner();
     }
     Ok(())
@@ -308,7 +328,8 @@ async fn run_ech() -> Result<()> {
     let stealth_mode = matches.get_one::<StealthMode>("stealth").unwrap();
     let remediation_action = matches.get_one::<RemediationAction>("remediation").unwrap();
     let verbose = matches.get_count("verbose");
-    let quiet = matches.get_flag("quiet");
+    let ci_mode = matches.get_flag("ci");
+    let quiet = matches.get_flag("quiet") || ci_mode;
     let dry_run = matches.get_flag("dry-run");
     let self_destruct = matches.get_flag("self-destruct");
     let privileged = matches.get_flag("privileged");
@@ -321,7 +342,7 @@ async fn run_ech() -> Result<()> {
     };
 
     // Initialize logging system
-    setup_logging(log_level, quiet).context("Failed to initialize logging system")?;
+    setup_logging(log_level, quiet, ci_mode).context("Failed to initialize logging system")?;
 
     info!(
         "🔥 Enterprise Credential Hunter (ECH) v{} starting",
@@ -337,6 +358,14 @@ async fn run_ech() -> Result<()> {
         EchConfig::load_from_file(config_path).context("Failed to load configuration")?;
 
     // Override config with CLI arguments
+    config.operation.ci_mode = ci_mode;
+    if ci_mode {
+        config.output.colored_output = false;
+        config.output.console_output = true;
+        config.output.format = OutputFormat::Ndjson;
+        config.operation.quiet_mode = true;
+    }
+
     if let Some(output_file) = matches.get_one::<String>("output") {
         config.output.file_path = Some(output_file.clone().into());
     }
@@ -359,6 +388,7 @@ async fn run_ech() -> Result<()> {
 
     config.operation.dry_run = dry_run;
     config.operation.self_destruct = self_destruct;
+    config.operation.quiet_mode = quiet;
     config.security.privileged_mode = privileged;
     if matches.get_flag("log-memory-reads") {
         config.memory.log_memory_reads = true;
@@ -389,6 +419,17 @@ async fn run_ech() -> Result<()> {
         config.operation.network_enabled = false;
     }
 
+    if let Some(exts) = matches.get_one::<String>("extensions") {
+        let parsed: Vec<String> = exts
+            .split(',')
+            .map(|s| s.trim().trim_start_matches('.').to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if !parsed.is_empty() {
+            config.filesystem.scan_extensions = parsed;
+        }
+    }
+
     // Map CLI remediation and stealth into config
     // Note: CLI enums are local; map to core config enums.
     config.remediation.default_action = match remediation_action {
@@ -406,10 +447,13 @@ async fn run_ech() -> Result<()> {
     };
 
     // Parse targets
-    let targets: Vec<String> = matches
+    let mut targets: Vec<String> = matches
         .get_many::<String>("target")
         .map(|values| values.cloned().collect())
         .unwrap_or_default();
+    if let Some(extra_paths) = matches.get_many::<String>("path") {
+        targets.extend(extra_paths.cloned());
+    }
 
     // Security context validation
     let security_context = SecurityContext::new(&config)
@@ -446,44 +490,66 @@ async fn run_ech() -> Result<()> {
 
     info!("🚀 ECH engine initialized successfully");
 
-    // Execute command (map results to unit for simplicity)
-    let result: Result<(), anyhow::Error> = match command {
-        CliCommand::FileScan => {
-            info!("📁 Starting filesystem credential scan");
-            engine.scan_filesystem(targets).await.map(|_| ())
-        }
-        CliCommand::MemoryScan => {
-            info!("🧠 Starting memory credential scan");
-            engine.scan_memory(targets).await.map(|_| ())
-        }
-        CliCommand::ContainerScan => {
-            info!("🐳 Starting container credential scan");
-            engine.scan_containers(targets).await.map(|_| ())
-        }
-        CliCommand::Monitor => {
-            info!("👁️ Starting continuous monitoring mode");
-            engine.start_monitoring(targets).await
-        }
-        CliCommand::Report => {
-            info!("📊 Generating compliance report");
-            engine.generate_report().await.map(|_| ())
-        }
-        CliCommand::TestSiem => {
-            info!("🔗 Testing SIEM integration");
-            engine.test_siem_integration().await
-        }
-        CliCommand::SelfDestruct => {
-            warn!("💥 Initiating self-destruct sequence");
-            engine.self_destruct().await
-        }
-        CliCommand::Capabilities => {
-            info!("🔍 Checking system capabilities");
-            engine.show_capabilities().await
-        }
-    };
+    // Execute command; some operations return structured results for output.
+    let operation_result: Result<Option<crate::core::engine::EngineResult>, anyhow::Error> =
+        match command {
+            CliCommand::FileScan => {
+                info!("📁 Starting filesystem credential scan");
+                engine.scan_filesystem(targets).await.map(Some)
+            }
+            CliCommand::MemoryScan => {
+                info!("🧠 Starting memory credential scan");
+                engine.scan_memory(targets).await.map(Some)
+            }
+            CliCommand::ContainerScan => {
+                info!("🐳 Starting container credential scan");
+                engine.scan_containers(targets).await.map(Some)
+            }
+            CliCommand::Monitor => {
+                info!("👁️ Starting continuous monitoring mode");
+                engine.start_monitoring(targets).await.map(|_| None)
+            }
+            CliCommand::Report => {
+                info!("📊 Generating compliance report");
+                engine.generate_report().await.map(Some)
+            }
+            CliCommand::TestSiem => {
+                info!("🔗 Testing SIEM integration");
+                engine.test_siem_integration().await.map(|_| None)
+            }
+            CliCommand::SelfDestruct => {
+                warn!("💥 Initiating self-destruct sequence");
+                engine.self_destruct().await.map(|_| None)
+            }
+            CliCommand::Capabilities => {
+                info!("🔍 Checking system capabilities");
+                engine.show_capabilities().await.map(|_| None)
+            }
+        };
 
-    match result {
-        Ok(_) => {
+    let mut exit_code = 0;
+
+    match operation_result {
+        Ok(Some(engine_result)) => {
+            if let Err(e) = output::write_output(&engine_result, &config.output) {
+                warn!("Failed to emit output: {}", e);
+            }
+
+            info!(
+                "✅ Operation completed: {} credentials found in {}ms",
+                engine_result.summary.credentials_found, engine_result.summary.processing_time_ms
+            );
+
+            if config.operation.ci_mode && engine_result.summary.credentials_found > 0 {
+                exit_code = 1;
+            }
+
+            if self_destruct {
+                warn!("🔥 Self-destruct activated - removing traces");
+                engine.self_destruct().await?;
+            }
+        }
+        Ok(None) => {
             info!("✅ Operation completed successfully");
             if self_destruct {
                 warn!("🔥 Self-destruct activated - removing traces");
@@ -498,6 +564,10 @@ async fn run_ech() -> Result<()> {
             }
             return Err(e);
         }
+    }
+
+    if exit_code != 0 {
+        std::process::exit(exit_code);
     }
 
     Ok(())

@@ -17,6 +17,7 @@
  */
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::future::Future;
@@ -231,7 +232,7 @@ pub enum OperationStatus {
 }
 
 /// Engine operation result
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EngineResult {
     /// Operation ID
     pub operation_id: Uuid,
@@ -295,7 +296,7 @@ struct MonitorEventStats {
 }
 
 /// Summary of operation results
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OperationSummary {
     /// Total files/targets scanned
     pub targets_scanned: u64,
@@ -317,7 +318,7 @@ pub struct OperationSummary {
 }
 
 /// Compliance report for enterprise auditing
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplianceReport {
     /// Report ID
     pub report_id: Uuid,
@@ -339,7 +340,7 @@ pub struct ComplianceReport {
 }
 
 /// Compliance violation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplianceViolation {
     /// Violation ID
     pub id: Uuid,
@@ -1734,6 +1735,14 @@ fn detection_engine_config(config: &EchConfig) -> crate::detection::DetectionCon
     detection_config.parallel_workers =
         resolve_parallel_workers(config.performance.parallel_workers);
     detection_config.enable_simd = config.performance.simd_optimizations;
+    detection_config.entropy_threshold = config.detection.entropy_threshold;
+    detection_config.min_secret_length = config.detection.min_credential_length.max(4);
+    detection_config.max_secret_length = config
+        .detection
+        .max_credential_length
+        .max(detection_config.min_secret_length);
+    detection_config.include_full_values =
+        config.operation.dry_run && config.output.include_full_values;
     if config.performance.cache_size_mb > 0 {
         detection_config.max_memory_usage =
             config.performance.cache_size_mb.saturating_mul(1024 * 1024);
@@ -2161,5 +2170,22 @@ mod tests {
         assert!(is_full_filesystem_target("filesystem://root"));
         assert!(is_full_filesystem_target("FS://*"));
         assert!(!is_full_filesystem_target("/tmp"));
+    }
+
+    #[test]
+    fn detection_config_respects_entropy_settings() {
+        let mut config = EchConfig::default();
+        config.detection.entropy_threshold = 5.5;
+        config.detection.min_credential_length = 16;
+        config.detection.max_credential_length = 256;
+        config.operation.dry_run = true;
+        config.output.include_full_values = true;
+
+        let detection_config = detection_engine_config(&config);
+
+        assert_eq!(detection_config.entropy_threshold, 5.5);
+        assert_eq!(detection_config.min_secret_length, 16);
+        assert_eq!(detection_config.max_secret_length, 256);
+        assert!(detection_config.include_full_values);
     }
 }

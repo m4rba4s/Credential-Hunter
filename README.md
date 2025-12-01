@@ -220,6 +220,20 @@ chmod +x ech
 
 # Memory analysis of running processes
 sudo ./ech memory-scan --pid-range 1000-2000 --output json
+
+### CI / Automation Mode
+
+Use the built-in CI-friendly output to gate pipelines without the flashy banner:
+
+```bash
+# NDJSON output, exit code 1 when findings exist
+cargo run --bin ech -- file-scan --ci --path src --extensions .rs,.toml --output results.ndjson
+```
+
+- `--ci` disables color/banner, switches to NDJSON, and sets exit code 1 if credentials are found.
+- `--path` is a convenience alias for `--target` when pointing at filesystem paths.
+- `--extensions` overrides the configured include list (comma-separated, with or without dots).
+- `--format` still accepts `json|ndjson|yaml|text`; `--output` writes to a file, otherwise prints to stdout.
 ```
 
 ## 📈 USE CASES

@@ -322,6 +322,18 @@ pub struct DetectionConfig {
     /// Maximum false positive rate
     pub max_false_positive_rate: f64,
 
+    /// Emit full credential values in detections (only when explicitly allowed).
+    pub include_full_values: bool,
+
+    /// Minimum entropy threshold used for high-entropy scanning.
+    pub entropy_threshold: f64,
+
+    /// Minimum credential length considered by entropy analysis.
+    pub min_secret_length: usize,
+
+    /// Maximum credential length considered by entropy analysis.
+    pub max_secret_length: usize,
+
     /// Performance settings
     pub parallel_workers: usize,
     /// Enable SIMD optimizations in the detection pipeline.
@@ -340,6 +352,10 @@ impl Default for DetectionConfig {
             enable_yara: false, // Disabled by default
             min_confidence: ConfidenceLevel::Medium,
             max_false_positive_rate: 0.05,
+            include_full_values: false,
+            entropy_threshold: 4.5,
+            min_secret_length: 8,
+            max_secret_length: 1024,
             parallel_workers: num_cpus::get(),
             enable_simd: true,
             max_memory_usage: 1024 * 1024 * 1024, // 1GB
@@ -366,9 +382,12 @@ impl DetectionEngine {
         );
 
         // Initialize entropy analyzer
-        let entropy_analyzer = Arc::new(
-            EntropyAnalyzer::new(4.5, 8, 1024), // threshold, min_len, max_len
-        );
+        let entropy_analyzer = Arc::new(EntropyAnalyzer::with_simd(
+            config.entropy_threshold,
+            config.min_secret_length,
+            config.max_secret_length,
+            config.enable_simd,
+        ));
 
         // Initialize context analyzer
         let context_analyzer =
@@ -561,11 +580,7 @@ impl DetectionEngine {
             credential_type: pattern_match.credential_type.clone(),
             confidence,
             masked_value: self.mask_value(&pattern_match.value),
-            full_value: if self.is_dry_run() {
-                Some(pattern_match.value)
-            } else {
-                None
-            },
+            full_value: self.full_value(&pattern_match.value),
             location: location.clone(),
             context: CredentialContext {
                 surrounding_text: context,
@@ -613,11 +628,7 @@ impl DetectionEngine {
             credential_type: credential_type.clone(),
             confidence,
             masked_value: self.mask_value(&entropy_match.value),
-            full_value: if self.is_dry_run() {
-                Some(entropy_match.value)
-            } else {
-                None
-            },
+            full_value: self.full_value(&entropy_match.value),
             location: location.clone(),
             context: CredentialContext {
                 surrounding_text: context_text.clone(),
@@ -661,11 +672,7 @@ impl DetectionEngine {
             credential_type: ml_result.credential_type.clone(),
             confidence: self.ml_confidence_to_level(ml_result.confidence),
             masked_value: self.mask_value(&ml_result.value),
-            full_value: if self.is_dry_run() {
-                Some(ml_result.value)
-            } else {
-                None
-            },
+            full_value: self.full_value(&ml_result.value),
             location: location.clone(),
             context: CredentialContext {
                 surrounding_text: context_text,
@@ -705,11 +712,7 @@ impl DetectionEngine {
             credential_type: CredentialType::Custom(rule_name.clone()),
             confidence: ConfidenceLevel::High,
             masked_value: self.mask_value(&rule_name),
-            full_value: if self.is_dry_run() {
-                Some(rule_name.clone())
-            } else {
-                None
-            },
+            full_value: self.full_value(&rule_name),
             location: location.clone(),
             context: CredentialContext {
                 surrounding_text: context_text,
@@ -885,10 +888,9 @@ impl DetectionEngine {
         stats.avg_processing_time_us = (stats.avg_processing_time_us + processing_us) / 2;
     }
 
-    /// Check if running in dry-run mode
-    fn is_dry_run(&self) -> bool {
-        // This would be set from the main config
-        std::env::var("ECH_DRY_RUN").is_ok()
+    /// Return full value if allowed by config, otherwise redact at source.
+    fn full_value(&self, value: &str) -> Option<String> {
+        self.config.include_full_values.then(|| value.to_string())
     }
 
     /// Additional helper methods would go here...
@@ -947,6 +949,10 @@ mod tests {
             enable_yara: false,
             min_confidence: ConfidenceLevel::Medium,
             max_false_positive_rate: 0.1,
+            include_full_values: false,
+            entropy_threshold: 4.2,
+            min_secret_length: 10,
+            max_secret_length: 512,
             parallel_workers: 4,
             enable_simd: true,
             max_memory_usage: 1024 * 1024 * 100, // 100MB
@@ -990,6 +996,10 @@ mod tests {
             enable_yara: false,
             min_confidence: ConfidenceLevel::Low,
             max_false_positive_rate: 0.5,
+            include_full_values: false,
+            entropy_threshold: 3.5,
+            min_secret_length: 6,
+            max_secret_length: 80,
             parallel_workers: 1,
             enable_simd: false,
             max_memory_usage: 1024 * 1024,

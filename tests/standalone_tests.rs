@@ -136,8 +136,13 @@ mod credential_detection_tests {
 
     #[test]
     fn test_api_key_patterns() {
-        let slack_token =
-            ["xox", "b", "-1234567890123-9876543210987-", "abcdefghijklmnopqrstuvwx"].concat();
+        let slack_token = [
+            "xox",
+            "b",
+            "-1234567890123-9876543210987-",
+            "abcdefghijklmnopqrstuvwx",
+        ]
+        .concat();
         let test_patterns: Vec<(&str, &str)> = vec![
             // Stripe API keys
             (

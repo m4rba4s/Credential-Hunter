@@ -19,6 +19,8 @@ pub mod engine;
 pub mod logging;
 /// Metrics collection and reporting infrastructure.
 pub mod metrics;
+/// Formatting and emitting results to console/files.
+pub mod output;
 /// Platform abstraction and capability detection.
 pub mod platform;
 /// Cooperative task scheduling primitives.

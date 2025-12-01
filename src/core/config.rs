@@ -396,6 +396,9 @@ pub struct OperationConfig {
     /// Quiet mode
     pub quiet_mode: bool,
 
+    /// CI-friendly output and exit codes
+    pub ci_mode: bool,
+
     /// Enable network operations
     pub network_enabled: bool,
 
@@ -428,6 +431,8 @@ pub enum LogLevel {
 pub enum OutputFormat {
     /// Emit structured JSON.
     Json,
+    /// Emit line-delimited JSON objects (one per record).
+    Ndjson,
     /// Emit YAML.
     Yaml,
     /// Emit CSV rows.
@@ -700,6 +705,7 @@ impl Default for OperationConfig {
             self_destruct: false,
             verbose_level: 0,
             quiet_mode: false,
+            ci_mode: false,
             network_enabled: true,
             filesystem_enabled: true,
             memory_enabled: true,
