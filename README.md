@@ -234,6 +234,13 @@ cargo run --bin ech -- file-scan --ci --path src --extensions .rs,.toml --output
 - `--path` is a convenience alias for `--target` when pointing at filesystem paths.
 - `--extensions` overrides the configured include list (comma-separated, with or without dots).
 - `--format` still accepts `json|ndjson|yaml|text`; `--output` writes to a file, otherwise prints to stdout.
+
+Example NDJSON line (one per detection, final line is a summary record):
+
+```json
+{"type":"detection","detection":{"id":"8f3e5a18-...","credential_type":"ApiSecret","confidence":"High","masked_value":"sk***23","full_value":null,"location":{"source_type":"file","path":"src/app.rs","line_number":42,"column":5,"memory_address":null,"process_id":null,"container_id":null},"context":{"surrounding_text":"API_SECRET=\"sk_live_abc123\"","variable_name":"API_SECRET","file_type":"rs","language":"rust","context_clues":[]},"metadata":{"detection_methods":["pattern_matching"],"pattern_name":"stripe_secret","entropy_score":null,"ml_confidence":null,"yara_matches":[],"processing_time_us":0},"risk_level":"High","recommended_actions":["Rotate affected secret","Review commit history","Purge leaked artifact"],"timestamp":"2024-05-01T12:34:56Z"}}
+{"type":"summary","summary":{"targets_scanned":10,"credentials_found":1,"high_risk_credentials":1,"processing_time_ms":1234,"bytes_processed":1048576,"errors_encountered":0}}
+```
 ```
 
 ## 📈 USE CASES

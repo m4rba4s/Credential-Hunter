@@ -211,6 +211,17 @@ Input Sources → Detection Engine → Analysis → Remediation → SIEM Export
 └─────────────┘ └─────────────┘ └──────────┘ └─────────┘ └─────────────┘
 ```
 
+### Runtime Flow (CLI → Engine → Output)
+1. **CLI (src/main.rs)** parses args, builds `EchConfig`, toggles `--ci` (quiet, NDJSON, exit code on findings).
+2. **Engine (core/engine.rs)** expands targets (`--target|--path`, filters/extensions), orchestrates filesystem/memory/container scanners, accumulates detections + summary.
+3. **Detection (detection/engine.rs)** runs pattern registry, entropy analyzer, optional ML/YARA; enriches `DetectionResult` with context (file/path/line), metadata (methods, entropy, pattern), risk and recommended actions.
+4. **Output (core/output.rs)** serializes `EngineResult` per `OutputFormat`: JSON/YAML/Text, NDJSON for CI (one detection per line + final summary). CI mode suppresses banner/colors and sets non-zero exit when credentials are found.
+
+### Output Contract (NDJSON)
+- `type: "detection"` records carry full `DetectionResult`: ids, credential_type, confidence/risk, masked value, optional full value (only in dry-run + allowlist), location (path/line/column/pid/container/memory_address), context (surrounding_text, variable_name, file_type/language), metadata (methods, pattern_name, entropy_score, ml_confidence, yara_matches, processing_time_us), recommended_actions, timestamp.
+- Final `type: "summary"` holds aggregate stats: `targets_scanned`, `credentials_found`, `high_risk_credentials`, `processing_time_ms`, `bytes_processed`, `errors_encountered`.
+- Formats JSON/YAML/Text follow the same struct shape; NDJSON is line-delimited for CI/log ingestion.
+
 ## 🔎 Observability & Telemetry
 
 - CLI and library bootstrap `core::logging::FancyLogFormatter` for colorized yet structured logging (see `docs/LOGGING_AND_OBSERVABILITY.md`).
